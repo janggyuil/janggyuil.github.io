@@ -2,7 +2,7 @@
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
   <url>
     <loc>https://janggyuil.github.io/</loc>
-    <lastmod>2026-11-14</lastmod>
+    <lastmod>2026-11-15</lastmod>
   </url>
   <url>
     <loc>https://janggyuil.github.io/about/</loc>
@@ -15,5 +15,17 @@
   <url>
     <loc>https://janggyuil.github.io/privacy/</loc>
     <lastmod>2026-11-14</lastmod>
+  </url>
+  <url>
+    <loc>https://janggyuil.github.io/posts/startup-framing/</loc>
+    <lastmod>2026-11-15</lastmod>
+  </url>
+  <url>
+    <loc>https://janggyuil.github.io/posts/own-numbers-and-exposure/</loc>
+    <lastmod>2026-11-15</lastmod>
+  </url>
+  <url>
+    <loc>https://janggyuil.github.io/posts/simplicity-for-judgment/</loc>
+    <lastmod>2026-11-15</lastmod>
   </url>
 </urlset>
