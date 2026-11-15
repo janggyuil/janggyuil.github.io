@@ -194,8 +194,13 @@ dialog:has(.marchPlanner) [type=submit]{min-width:104px}
 .scenarioPicker select{margin-top:4px}
 .rulerHeading{margin-top:13px;font:700 17px var(--serif)}
 .factionCard span:last-child{min-width:0}
-.freeBadge{display:inline-grid;place-items:center;min-width:17px;height:17px;padding:0 3px;border-radius:10px;border:1px solid #6f4826;background:#ffe3a0;color:#492d18;font:800 10px/1 var(--sans)}
+.freeBadge,.officerBadge{display:inline-grid;place-items:center;min-width:17px;height:17px;padding:0 3px;border-radius:10px;font:800 10px/1 var(--sans)}
+/* 재야 장수: 초록, 주둔 장수: 먹색 */
+.freeBadge{border:1px solid #1f5a33;background:#3f9a5c;color:#fff}
+.officerBadge{border:1px solid #f3e6c8;background:#2f2a24;color:#fff4dc}
 .city .freeBadge{position:absolute;top:-3px;left:calc(50% + 10px);box-shadow:0 1px 3px #30250f55}
+.city .officerBadge{position:absolute;top:-3px;left:calc(50% + 10px);box-shadow:0 1px 3px #30250f55}
+.city .officerBadge+.freeBadge{top:14px}
 .legendFree{font-style:normal}
 .actions [data-domestic=persuade],.actions [data-domestic=hire]{grid-column:1/-1}
 .actions.singleAction{grid-template-columns:1fr}
@@ -257,6 +262,8 @@ dialog:has(.marchPlanner) [type=submit]{min-width:104px}
 .city .cityName{font-size:11px;padding:1px 5px;border-radius:3px}
 .city .cityTroops{font-size:9px;padding:1px 4px}
 .city .freeBadge{top:-4px;left:calc(50% + 7px);transform:scale(.85)}
+.city .officerBadge{top:-4px;left:calc(50% + 7px);transform:scale(.85)}
+.city .officerBadge+.freeBadge{top:11px}
 @media(max-width:650px){.city .flag{width:19px;height:19px;font-size:11px}.city .cityName{font-size:10px;padding:1px 4px}.city .cityTroops{font-size:8px}}
 
 /* 황제 거처 */

@@ -673,6 +673,48 @@ function disbandCorps(s,corpsId,reason='') {
   return true;
 }
 
+// 도독의 장수 재배치: 매달 한 번, 군단 안에서 장수가 남는 도시의 장수를 모자란 도시로 보냅니다(세력 명령 없음).
+// 장수가 없는 도시를 가장 먼저, 그다음 장수가 한 명뿐인 전선 도시를 채웁니다. 도독 본인과 각 도시의 성주는 남깁니다.
+function corpsOfficerPlan(s,corps) {
+  const commander=corpsCommander(s,corps);
+  if (!commander) return null;
+  const incoming=id=>s.transfers.filter(t=>t.officerMove && t.faction===s.player && t.route.at(-1)===id)
+    .reduce((n,t)=>n+transferOfficers(s,t).length,0);
+  const count=id=>officersAt(s,id).length+incoming(id);
+  const needs=corps.cities.map(id=>({id,n:count(id),front:isFrontline(s,id)}))
+    .filter(c=>c.n===0 || (c.front && c.n===1))
+    .sort((a,b)=>a.n-b.n || b.front-a.front);
+  for (const need of needs) {
+    const min=need.n===0?2:3;
+    const donors=corps.cities.filter(id=>id!==need.id && officersAt(s,id).length>=min)
+      .sort((a,b)=>isFrontline(s,a)-isFrontline(s,b) || officersAt(s,b).length-officersAt(s,a).length);
+    for (const from of donors) {
+      const keep=new Set([commander.id,localLeader(s,from)?.id]);
+      const score=o=>need.front?o.lead+o.war:o.lead+o.war+o.intel+o.politics+o.charm;
+      const pick=officersAt(s,from).filter(o=>!keep.has(o.id)).sort((a,b)=>score(b)-score(a))[0];
+      if (pick) return {from,to:need.id,officerId:pick.id};
+    }
+  }
+  return null;
+}
+function corpsOfficerTurn(s,corps) {
+  const plan=corpsOfficerPlan(s,corps);
+  if (!plan || !sendOfficers(s,plan.from,plan.to,[plan.officerId])) return null;
+  s.log[0].message=`[${corpsName(s,corps.id)}] 도독 ${corpsCommander(s,corps).name}: ${s.log[0].message}`;
+  return plan;
+}
+// 군단 도시에서 출진해 점령한 도시는 그 군단에 편입합니다.
+function joinCorps(s,corpsId,id) {
+  const corps=corpsById(s,corpsId), c=s.cities[id];
+  if (!corps || c.owner!==s.player || c.corps!==undefined || rulerOf(s,s.player)?.city===id) return false;
+  corps.cities.push(id);
+  c.corps=corps.id;
+  c.delegated=true;
+  c.governor=localLeader(s,id)?.id;
+  record(s,`[${corpsName(s,corps.id)}] ${towns[id].name}을(를) 군단에 편입했습니다.`);
+  return true;
+}
+
 // ── 후방 수송 ─────────────────────────────────────────
 // 적·중립 도시와 맞닿지 않은 아군 도시는 후방, 맞닿은 도시는 전선입니다.
 const isFrontline = (s,id) => neighbors(id).some(n=>s.cities[n].owner!==s.cities[id].owner);
@@ -698,7 +740,8 @@ function convoyPlan(s,id) {
     const need=(enemies.length?2:1)*(threat+1000)/(troops+500);
     return {to,need,space:Math.max(0,cityCaps(target).troops-troops)};
   }).filter(f=>f.space>0).sort((a,b)=>b.need-a.need);
-  const front=fronts[0];
+  // 군단 도시는 도독의 지휘에 따라 같은 군단의 전선을 먼저 채웁니다.
+  const front=(c.corps!==undefined && fronts.find(f=>s.cities[f.to].corps===c.corps))||fronts[0];
   if (!front) return null;
   const keep=rearReserve(s,id);
   const units=Math.max(0,Math.min(c.troops-keep.troops,front.space));
@@ -821,9 +864,12 @@ function delegateTurn(s,id,random=Math.random) {
   }
   if (plan.type==='march') {
     if (!march(s,plan.from,plan.to,plan.units,plan.officers,random)) return null;
-    s.log[0].message=`[위임 · ${towns[id].name}] ${s.log[0].message}`;
-    // 성주가 출진해 도시를 떠났으면 남은 장수 가운데 같은 방식으로 다시 고르지 않고 위임을 풉니다.
-    if (!governorOf(s,id)) {
+    s.log[0].message=`[${commander?`${corpsName(s,city.corps)} · `:'위임 · '}${towns[id].name}] ${s.log[0].message}`;
+    if (commander) joinCorps(s,city.corps,plan.to);
+    // 군단 도시는 남은 장수 가운데 가장 뛰어난 장수가 성주를 이어받습니다.
+    if (commander) city.governor=localLeader(s,id)?.id;
+    // 위임 도시는 성주가 출진해 도시를 떠났으면 남은 장수 가운데 같은 방식으로 다시 고르지 않고 위임을 풉니다.
+    else if (!governorOf(s,id)) {
       delete city.delegated;
       delete city.governor;
       record(s,`[위임 해제] 성주 ${governor.name}이(가) ${towns[id].name}을(를) 떠나 위임이 풀렸습니다.`);
@@ -1169,17 +1215,22 @@ const cargoLimit = (s,from,units) => {
 
 // 장수만 다른 아군 도시로 보냅니다. 인원 제한이 없고, 어디든 다음 달에 도착하며 명령 1회를 씁니다.
 function moveOfficers(s,from,to,officerIds) {
+  if (!s.ap || s.end || !sendOfficers(s,from,to,officerIds)) return false;
+  s.ap--;
+  return true;
+}
+// 명령을 쓰지 않는 장수 이동입니다. 군단 도독의 장수 재배치도 이것을 씁니다.
+function sendOfficers(s,from,to,officerIds) {
   const a=s.cities[from], b=s.cities[to];
   const ids=[...new Set([].concat(officerIds))];
   const movers=ids.map(id=>s.officers.find(o=>o.id===id && o.city===from && !o.captive));
-  if (!s.ap || s.end || !a?.owner || from===to || b?.owner!==a.owner || !ids.length || movers.some(o=>!o)) return false;
+  if (!a?.owner || from===to || b?.owner!==a.owner || !ids.length || movers.some(o=>!o)) return false;
   const arrival=s.month+OFFICER_MOVE_TURNS;
   for (const officer of movers) {
     officer.city=null;
     officer.inTransit=a.owner;
   }
   s.transfers.push({route:[from,to],units:0,officerIds:ids,faction:a.owner,arrival,officerMove:true});
-  s.ap--;
   record(s,`[장수 이동] ${teamNames(movers)} · ${towns[from].name} → ${towns[to].name} · ${date(arrival)} 도착 예정`);
   return true;
 }
@@ -1318,6 +1369,8 @@ function advance(s,random=Math.random) {
     corps.cities=corps.cities.filter(id=>s.cities[id].owner===s.player);
     if (!corps.cities.length) disbandCorps(s,corps.id,'모든 도시를 잃어');
   }
+  // 군단 도독은 매달 군단 안에서 장수 한 명을 재배치할 수 있습니다.
+  for (const corps of [...(s.corps??[])]) if (!s.end) corpsOfficerTurn(s,corps);
   // 위임 도시는 세력 명령과 별도로 각자 명령 1회를 씁니다.
   for (const id of owned(s).filter(id=>s.cities[id].delegated)) {
     if (s.end) break;
@@ -1361,7 +1414,7 @@ function advance(s,random=Math.random) {
   }
 }
 
-if (typeof module!=='undefined') module.exports={factions,playable,scenarios,freeCityOf,seasonFor,applySeasonEvent,towns,roads,roster,owned,neighbors,friendlyRoutes,officersAt,factionOfficers,captives,resolveCaptive,newGame,unavailable,persuasionTargets,persuasionChance,applyDomestic,march,advance,power,levyAmount,formCorps,disbandCorps,corpsCandidates,corpsFreeCities,corpsPromptDue,corpsById,corpsName,CORPS_PROMPT_CITIES,RANKS,rankOf,meritOf,commandCap,addMerit,attackCapacity,migrateOfficers,extraOfficers,isFrontline,rearReserve,convoyPlan,sendConvoy,emperorSeat,emperorHolder,emperorBonus,updateEmperor,EMPEROR_MOVE,EMPEROR_GOLD,delegateStyle,delegationUnavailable,setDelegation,delegatePlan,delegateTurn,governorOf,DELEGATE_STYLES,goldIncome,holdCouncil,followAdvice,adviceUnavailable,marchCapacity,councilUnavailable,councilAdvisors,councilQuality,activeCouncil,rulerOf,COUNCIL_GRADES,cargoLimit,cityCaps,gain,battleTeam,bestTeam,defendingTeam,statsOf,MAX_GENERALS,moveOfficers,OFFICER_MOVE_TURNS};
+if (typeof module!=='undefined') module.exports={factions,playable,scenarios,freeCityOf,seasonFor,applySeasonEvent,towns,roads,roster,owned,neighbors,friendlyRoutes,officersAt,factionOfficers,captives,resolveCaptive,newGame,unavailable,persuasionTargets,persuasionChance,applyDomestic,march,advance,power,levyAmount,formCorps,disbandCorps,corpsCandidates,corpsFreeCities,corpsPromptDue,corpsById,corpsName,CORPS_PROMPT_CITIES,RANKS,rankOf,meritOf,commandCap,addMerit,attackCapacity,migrateOfficers,extraOfficers,isFrontline,rearReserve,convoyPlan,sendConvoy,emperorSeat,emperorHolder,emperorBonus,updateEmperor,EMPEROR_MOVE,EMPEROR_GOLD,delegateStyle,delegationUnavailable,setDelegation,delegatePlan,delegateTurn,governorOf,DELEGATE_STYLES,goldIncome,holdCouncil,followAdvice,adviceUnavailable,marchCapacity,councilUnavailable,councilAdvisors,councilQuality,activeCouncil,rulerOf,COUNCIL_GRADES,cargoLimit,cityCaps,gain,battleTeam,bestTeam,defendingTeam,statsOf,MAX_GENERALS,moveOfficers,OFFICER_MOVE_TURNS,sendOfficers,corpsOfficerPlan,corpsOfficerTurn,joinCorps,corpsCommander};
 
 if (typeof document!=='undefined') {
   const $=id=>document.getElementById(id);
@@ -1483,16 +1536,20 @@ if (typeof document!=='undefined') {
       const city=freeCityOf(state,officer);
       freeCounts[city]=(freeCounts[city]??0)+1;
     }
+    // 도시에 주둔한 장수 수(포로 제외)
+    const officerCounts={};
+    for (const officer of state.officers) if (officer.city && !officer.captive) officerCounts[officer.city]=(officerCounts[officer.city]??0)+1;
     $('cities').innerHTML=Object.entries(towns).map(([id,t])=>{
       const c=state.cities[id];
       const f=factions[c.owner];
       const freeCount=freeCounts[id]??0;
-      return `<button class="city${selected===id?' active':''}" data-city="${id}" aria-pressed="${selected===id}" aria-label="${t.name}${id===emperorSeat(state)?', 황제 거처':''}, ${factionName(c.owner)}, 병력 ${fmt(c.troops)}명${freeCount?`, 재야 장수 ${freeCount}명`:''}" style="--x:${t.x}%;--y:${t.y}%;--f:${color(c.owner)}"><span class="flag${f?'':' neutralFlag'}" aria-hidden="true">${f?.seal??'城'}</span>${freeCount?`<span class="freeBadge" title="재야 장수 ${freeCount}명" aria-hidden="true">${freeCount}</span>`:''}${id===emperorSeat(state)?`<span class="emperorBadge" title="황제 · ${c.owner?`${factionName(c.owner)} 옹위`:'옹위 세력 없음'}" aria-hidden="true">帝</span>`:''}<span class="cityName">${t.name}</span><span class="cityTroops">${fmt(c.troops)}</span></button>`;
+      const officerCount=officerCounts[id]??0;
+      return `<button class="city${selected===id?' active':''}" data-city="${id}" aria-pressed="${selected===id}" aria-label="${t.name}${id===emperorSeat(state)?', 황제 거처':''}, ${factionName(c.owner)}, 병력 ${fmt(c.troops)}명${officerCount?`, 장수 ${officerCount}명`:''}${freeCount?`, 재야 장수 ${freeCount}명`:''}" style="--x:${t.x}%;--y:${t.y}%;--f:${color(c.owner)}"><span class="flag${f?'':' neutralFlag'}" aria-hidden="true">${f?.seal??'城'}</span>${officerCount?`<span class="officerBadge" title="장수 ${officerCount}명" aria-hidden="true">${officerCount}</span>`:''}${freeCount?`<span class="freeBadge" title="재야 장수 ${freeCount}명" aria-hidden="true">${freeCount}</span>`:''}${id===emperorSeat(state)?`<span class="emperorBadge" title="황제 · ${c.owner?`${factionName(c.owner)} 옹위`:'옹위 세력 없음'}" aria-hidden="true">帝</span>`:''}<span class="cityName">${t.name}</span><span class="cityTroops">${fmt(c.troops)}</span></button>`;
     }).join('');
     $('legend').innerHTML=[...scenarioFor(state).rulers,null].map(id=>{
       const cities=owned(state,id).length;
       return `<span><i class="dot${id===null?' neutralDot':''}" style="--f:${color(id)}"></i>${factionName(id)} ${cities}</span>`;
-    }).join('')+`<span><i class="freeBadge legendFree" aria-hidden="true">#</i>재야 장수</span>`+
+    }).join('')+`<span><i class="officerBadge legendFree" aria-hidden="true">#</i>주둔 장수</span><span><i class="freeBadge legendFree" aria-hidden="true">#</i>재야 장수</span>`+
       `<span><i class="emperorBadge legendEmperor" aria-hidden="true">帝</i>황제 · ${towns[emperorSeat(state)].name} · ${state.cities[emperorSeat(state)].owner?`${factionName(state.cities[emperorSeat(state)].owner)} 옹위`:'옹위 세력 없음'}</span>`;
     drawMap();
   }
@@ -1544,7 +1601,7 @@ if (typeof document!=='undefined') {
             const corps=corpsById(state,c.corps);
             const cmd=state.officers.find(o=>o.id===corps.commander);
             const gov=governorOf(state,selected);
-            return `<p class="delegation">${corpsName(state,c.corps)} · 도독 ${escapeText(cmd?.name??'없음')}${cmd?`(${rankOf(cmd).name} · ${delegateStyle(cmd)}형)`:''} · ${gov?`성주 ${escapeText(gov.name)}`:'성주 없음 · 수송만'} · 매달 명령 1회 자동</p>
+            return `<p class="delegation">${corpsName(state,c.corps)} · 도독 ${escapeText(cmd?.name??'없음')}${cmd?`(${rankOf(cmd).name} · ${delegateStyle(cmd)}형)`:''} · ${gov?`성주 ${escapeText(gov.name)}`:'성주 없음 · 수송만'} · 매달 명령 1회 자동 · 도독이 출진·수송·장수 재배치</p>
               <button class="secondary delegateButton" data-corps>군단 관리</button>`;
           }
           if (c.delegated) {
@@ -1721,6 +1778,7 @@ if (typeof document!=='undefined') {
     const canForm=candidates.length && free.length>=2;
     show(prompt?'군단 구성':'군단',`
       ${prompt?`<p>직할 도시가 ${free.length}곳입니다. 여러 도시를 묶어 도독에게 맡기면 매달 도시마다 명령 1회를 알아서 쓰고, 군단 도시에서 나가는 공격은 +${Math.round(CORPS_BONUS*100)}%를 받습니다.</p>`:''}
+      <p class="hint">도독의 권한 · 군단 도시에서 출진하고(점령한 도시는 군단에 편입), 남는 병력·물자를 같은 군단의 전선으로 보내며, 매달 한 번 장수가 남는 도시의 장수를 빈 도시나 장수가 모자란 전선으로 옮깁니다. 세력 명령은 쓰지 않습니다.</p>
       ${list?`<ul class="corpsList">${list}</ul>`:''}
       ${canForm?`<div class="subhead">새 군단</div>
         <label>도독 (장군 이상)<select name="commander">${candidates.map(o=>`<option value="${o.id}">${escapeText(o.name)} · ${rankOf(o).name} · ${delegateStyle(o)}형 · ${towns[o.city].name}</option>`).join('')}</select></label>
