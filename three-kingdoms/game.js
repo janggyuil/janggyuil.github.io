@@ -915,6 +915,21 @@ function applyDomestic(s,id,key,officerId,targetId,random=Math.random) {
   return true;
 }
 
+// 길(도로)을 따라 from에서 가장 가까운 faction의 도시. from이 그 세력 도시면 from입니다.
+function nearestOwned(s,faction,from) {
+  const seen=new Set([from]);
+  let frontier=[from];
+  while (frontier.length) {
+    const hit=frontier.filter(id=>s.cities[id].owner===faction)
+      .sort((a,b)=>s.cities[b].troops-s.cities[a].troops)[0];
+    if (hit) return hit;
+    frontier=frontier.flatMap(id=>neighbors(id)).filter(id=>!seen.has(id) && seen.add(id));
+  }
+  return null;
+}
+// 포로를 등용하면 포획한 도시에 배치합니다. 그 도시를 잃었으면 가장 가까운 아군 도시로 보냅니다.
+const captiveDestination = (s,officer) => nearestOwned(s,s.player,officer.captive.city);
+
 function resolveCaptive(s,id,decision) {
   const officer=captives(s).find(o=>o.id===id);
   if (!s.player || !officer) return false;
@@ -922,10 +937,11 @@ function resolveCaptive(s,id,decision) {
   let result;
   switch (decision) {
     case 'recruit': {
-      const destination=s.cities[city].owner===s.player?city:stronghold(s,s.player);
+      const destination=captiveDestination(s,officer);
       if (!destination) return false;
       officer.city=destination;
-      result=`등용 · ${towns[destination].name}에 배치했습니다.`;
+      result=destination===city?`등용 · 포획한 ${towns[city].name}에 배치했습니다.`:
+        `등용 · ${towns[city].name}을(를) 잃어 가장 가까운 ${towns[destination].name}에 배치했습니다.`;
       break;
     }
     case 'execute':
@@ -1426,7 +1442,7 @@ function advance(s,random=Math.random) {
   }
 }
 
-if (typeof module!=='undefined') module.exports={factions,playable,scenarios,freeCityOf,seasonFor,applySeasonEvent,towns,roads,roster,owned,neighbors,friendlyRoutes,officersAt,factionOfficers,captives,resolveCaptive,newGame,unavailable,persuasionTargets,persuasionChance,applyDomestic,march,advance,power,levyAmount,formCorps,disbandCorps,corpsCandidates,corpsBlockedGenerals,corpsFreeCities,corpsPromptDue,corpsById,corpsName,CORPS_PROMPT_CITIES,RANKS,rankOf,meritOf,commandCap,addMerit,attackCapacity,migrateOfficers,extraOfficers,isFrontline,rearReserve,convoyPlan,sendConvoy,emperorSeat,emperorHolder,emperorBonus,updateEmperor,EMPEROR_MOVE,EMPEROR_GOLD,delegateStyle,delegationUnavailable,setDelegation,delegatePlan,delegateTurn,governorOf,DELEGATE_STYLES,goldIncome,holdCouncil,followAdvice,adviceUnavailable,marchCapacity,councilUnavailable,councilAdvisors,councilQuality,activeCouncil,rulerOf,COUNCIL_GRADES,cargoLimit,cityCaps,gain,battleTeam,bestTeam,defendingTeam,statsOf,MAX_GENERALS,moveOfficers,OFFICER_MOVE_TURNS,sendOfficers,corpsOfficerPlan,corpsOfficerTurn,joinCorps,corpsCommander};
+if (typeof module!=='undefined') module.exports={factions,playable,scenarios,freeCityOf,seasonFor,applySeasonEvent,towns,roads,roster,owned,neighbors,friendlyRoutes,officersAt,factionOfficers,captives,resolveCaptive,nearestOwned,newGame,unavailable,persuasionTargets,persuasionChance,applyDomestic,march,advance,power,levyAmount,formCorps,disbandCorps,corpsCandidates,corpsBlockedGenerals,corpsFreeCities,corpsPromptDue,corpsById,corpsName,CORPS_PROMPT_CITIES,RANKS,rankOf,meritOf,commandCap,addMerit,attackCapacity,migrateOfficers,extraOfficers,isFrontline,rearReserve,convoyPlan,sendConvoy,emperorSeat,emperorHolder,emperorBonus,updateEmperor,EMPEROR_MOVE,EMPEROR_GOLD,delegateStyle,delegationUnavailable,setDelegation,delegatePlan,delegateTurn,governorOf,DELEGATE_STYLES,goldIncome,holdCouncil,followAdvice,adviceUnavailable,marchCapacity,councilUnavailable,councilAdvisors,councilQuality,activeCouncil,rulerOf,COUNCIL_GRADES,cargoLimit,cityCaps,gain,battleTeam,bestTeam,defendingTeam,statsOf,MAX_GENERALS,moveOfficers,OFFICER_MOVE_TURNS,sendOfficers,corpsOfficerPlan,corpsOfficerTurn,joinCorps,corpsCommander};
 
 if (typeof document!=='undefined') {
   const $=id=>document.getElementById(id);
@@ -1753,13 +1769,13 @@ if (typeof document!=='undefined') {
     const prisoners=captives(state);
     if (!prisoners.length) return;
     const rows=prisoners.map(o=>`<li>
-      <div><strong>${escapeText(o.name)}</strong><span>${factionName(o.captive.faction)} · ${towns[o.captive.city].name}에서 포획</span><span>${statLine(o)}</span></div>
+      <div><strong>${escapeText(o.name)}</strong><span>${factionName(o.captive.faction)} · ${towns[o.captive.city].name}에서 포획${(()=>{const to=captiveDestination(state,o);return to?` · 등용 시 ${towns[to].name}에 배치`:'';})()}</span><span>${statLine(o)}</span></div>
       <div class="prisonerActions">
         <button type="button" class="secondary" data-id="${o.id}" data-treatment="recruit" aria-label="${escapeText(o.name)} 등용">등용</button>
         <button type="button" class="secondary" data-id="${o.id}" data-treatment="execute" aria-label="${escapeText(o.name)} 참수">참수</button>
         <button type="button" class="secondary" data-id="${o.id}" data-treatment="release" aria-label="${escapeText(o.name)} 석방">석방</button>
       </div></li>`).join('');
-    show('포로 장수',`<p>등용하면 아군에 합류합니다. 석방하면 원래 세력으로 돌아가고, 그 세력이 멸망했다면 재야로 돌아갑니다.</p>
+    show('포로 장수',`<p>등용하면 포획한 도시에 아군 장수로 배치합니다(그 도시를 잃었으면 가장 가까운 아군 도시). 석방하면 원래 세력으로 돌아가고, 그 세력이 멸망했다면 재야로 돌아갑니다.</p>
       <ul class="prisonerList">${rows}</ul>`,undefined,undefined,'나중에');
     const form=$('dialogBody').firstElementChild;
     form.onclick=event=>{
