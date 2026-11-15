@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#202822">
+<meta name="description" content="후한 말기 다섯 시나리오를 플레이하는 싱글플레이 턴제 전략 게임">
+<title>삼국지 · 군웅할거</title>
+<link rel="stylesheet" href="style.css?v=24">
+<script defer src="game.js?v=24"></script>
+</head>
+<body>
+<header class="top">
+  <div class="brand"><span class="seal" aria-hidden="true">漢</span><div><strong>삼국지</strong><span>군웅할거</span></div></div>
+  <div class="topRight"><span id="status">시나리오 선택</span><button id="roster" class="topButton">장수 명단</button><button id="help" class="topButton">도움말</button><button id="restart" class="topButton" hidden>새 게임</button></div>
+</header>
+<main class="wrap">
+  <section class="intro" aria-label="시나리오">
+    <div><div class="eyebrow"><span></span> <b id="scenarioNote">반동탁 연합</b></div><h1 id="scenarioTitle">군웅할거</h1></div>
+    <div id="turn" class="turn"><span>시나리오 시작</span><strong>190년 1월</strong></div>
+  </section>
+  <aside id="seasonEvent" class="seasonEvent" aria-label="계절 사건" hidden><strong></strong><span></span></aside>
+  <aside id="factionDefeats" class="seasonEvent eventLoss" role="status" hidden></aside>
+  <div id="resources" class="resources" hidden></div>
+  <div class="layout">
+    <section class="atlas" aria-label="전략 지도">
+      <div class="panelHead"><h2>천하 지도</h2><span id="mapCount"></span></div>
+      <div id="attackMarch" class="attackMarch" hidden>
+        <span id="attackMarchStatus" role="status"></span>
+        <button id="viewBattle" type="button" class="primary">전투 보기</button>
+      </div>
+      <div id="map" class="map">
+        <canvas id="routes" aria-hidden="true"></canvas>
+        <span class="compass" aria-hidden="true">北<span>↑</span></span>
+        <span class="water water1" aria-hidden="true">黃 河</span><span class="water water2" aria-hidden="true">長 江</span>
+        <div id="cities" class="cities"></div>
+      </div>
+      <div id="legend" class="legend"></div>
+    </section>
+    <aside id="side" class="side" aria-label="군주 및 도시 관리"></aside>
+  </div>
+  <section id="chronicle" class="chronicle">
+    <div class="panelHead"><h2>천하 연대기</h2><span id="logLabel">190년 1월</span></div>
+    <ol id="log" class="log"></ol>
+  </section>
+</main>
+<div id="notice" class="notice" role="status" hidden></div>
+<div id="updateNotice" class="updateNotice" role="status" hidden>새 버전이 있습니다. 진행은 자동 저장되어 있습니다. <button type="button" class="primary">새로고침</button></div>
+<dialog id="dialog"><div id="dialogBody"></div></dialog>
+</body>
+</html>

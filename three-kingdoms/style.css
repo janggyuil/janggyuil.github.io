@@ -1,0 +1,280 @@
+@import url('https://fonts.googleapis.com/css2?family=Crimson+Text:wght@600;700&family=Gowun+Batang:wght@400;700&family=Noto+Sans+KR:wght@400;500;600;700;800&display=swap');
+:root{color-scheme:light;--ink:#222a22;--forest:#253a31;--green:#385c49;--gold:#a37a3c;--line:#d9d0bd;--paper:#faf6eb;--ground:#eee9dd;--muted:#655d4e;--serif:"Gowun Batang",Georgia,serif;--sans:"Noto Sans KR",system-ui,sans-serif}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+body{margin:0;background:var(--ground);color:var(--ink);font:14px var(--sans)}
+button,select,input{font:inherit}
+button{cursor:pointer}
+button:disabled{cursor:default;opacity:.5}
+button:focus-visible,select:focus-visible,input:focus-visible{outline:3px solid #ad7935;outline-offset:3px}
+.top{height:67px;background:#222c26;color:#f7edd8;border-bottom:3px solid #987947;display:flex;align-items:center;justify-content:space-between;padding:0 max(24px,calc((100% - 1344px)/2));gap:14px}
+.brand,.topRight{display:flex;align-items:center;gap:12px}
+.brand div{display:flex;gap:10px;align-items:baseline}
+.brand strong{font:700 23px var(--serif);white-space:nowrap}
+.brand div span{font-size:12px;color:#cfbf9e;white-space:nowrap}
+.seal{width:34px;height:34px;background:#994c38;color:#fff3dc;display:grid;place-items:center;font:bold 21px Georgia;border:1px solid #c48166;border-radius:3px;box-shadow:inset 0 0 0 2px #994c38,inset 0 0 0 3px #c48166}
+.topRight{font-size:12px}
+#status{color:#d8c6a1}
+.topButton{background:transparent;border:1px solid #627063;border-radius:4px;padding:6px 10px;color:#f6eddb;white-space:nowrap}
+.topButton:hover{background:#3a493d}
+.wrap{max-width:1392px;margin:auto;padding:22px 24px 36px}
+.intro{display:flex;justify-content:space-between;align-items:flex-end;margin-bottom:17px;gap:12px}
+.eyebrow{font-size:12px;letter-spacing:.06em;font-weight:700;color:#725735;display:flex;align-items:center;gap:8px}
+.eyebrow span{background:#aa7850;width:7px;height:7px;transform:rotate(45deg)}
+h1,h2,h3,p{margin:0}
+h1{font:700 clamp(36px,5vw,56px)/1.1 var(--serif);letter-spacing:-.055em;margin-top:4px}
+.turn{text-align:right;white-space:nowrap}
+.turn span{display:block;font-size:11px;color:var(--muted)}
+.turn strong{font:700 clamp(20px,3vw,28px) var(--serif)}
+.resources{display:grid;grid-template-columns:repeat(4,1fr);background:#f8f4e9;border:1px solid var(--line);margin:0 0 14px;border-radius:5px}
+.resource{display:flex;align-items:center;justify-content:space-between;padding:9px 16px;gap:5px}
+.resource+.resource{border-left:1px solid var(--line)}
+.resource span{color:var(--muted);font-size:12px}
+.resource b{font-variant-numeric:tabular-nums;font-size:16px}
+.layout{display:grid;grid-template-columns:minmax(0,1fr) 320px;gap:16px;align-items:start}
+.atlas,.side,.chronicle{border:1px solid var(--line);background:var(--paper);border-radius:6px;box-shadow:0 2px 5px #3e32120b;overflow:hidden}
+.panelHead{display:flex;justify-content:space-between;align-items:center;padding:11px 16px;border-bottom:1px solid var(--line);gap:12px}
+.panelHead h2{font:700 20px var(--serif)}
+.panelHead>span{font-size:11px;color:var(--muted)}
+.map{position:relative;isolation:isolate;overflow:hidden;height:clamp(540px,56vw,700px);background:radial-gradient(ellipse at 93% 48%,#a5b6a3 0,transparent 38%),radial-gradient(ellipse at 1% 78%,#a29c70 0,transparent 45%),#dfd4ae}
+.map::before{content:"";position:absolute;inset:0;background-image:url("terrain.jpg");background-size:cover;background-position:center;opacity:.89;z-index:-1}
+.map::after{content:"";position:absolute;inset:0;box-shadow:inset 0 0 65px #59442145;pointer-events:none}
+#routes,.cities{position:absolute;inset:0;width:100%;height:100%}
+.compass,.water{position:absolute;pointer-events:none;color:#4c5447;font-family:Georgia,serif}
+.compass{top:17px;right:20px;border:1px solid #6d7362;border-radius:50%;width:37px;height:37px;display:grid;place-content:center;text-align:center;font-size:12px;line-height:12px;background:#eee7ceab}
+.compass span{display:block}
+.water{font-size:14px;opacity:.65;letter-spacing:.15em}
+.water1{top:20%;left:48%}.water2{bottom:16%;left:43%}
+.city{--f:#6f6552;position:absolute;left:var(--x);top:var(--y);transform:translate(-50%,-50%);display:flex;flex-direction:column;align-items:center;gap:2px;z-index:1;border:0;background:none;padding:0;color:#fff7e4;white-space:nowrap}
+.city:hover,.city.active{z-index:3}
+.flag{width:31px;height:31px;display:grid;place-items:center;background:var(--f);border:1px solid #faedc8;border-radius:4px;box-shadow:0 2px 6px #30250f69;font-size:16px;font-family:var(--serif)}
+.city.active .flag{outline:3px solid #fff3cc;outline-offset:2px}
+.city:hover .flag{filter:brightness(1.22)}
+.cityName{font-size:13px;font-weight:800;line-height:1.15;padding:3px 8px;background:#283029f0;border:1px solid #eee3b3a0;border-radius:4px}
+.cityTroops{font-size:10px;line-height:1.15;padding:2px 6px;border-radius:8px;background:#f6ebcc;color:#33362d;font-weight:700;box-shadow:0 1px 3px #382d1840}
+.legend{display:flex;align-items:center;flex-wrap:wrap;gap:8px 16px;padding:10px 15px;min-height:42px}
+.legend span{font-size:11px;color:#4f493b;display:flex;gap:6px;align-items:center}
+.dot{width:8px;height:8px;display:inline-block;border-radius:50%;background:var(--f);flex:none}
+.sideInner{padding:14px 15px}
+.choiceIntro,.hint{font-size:12px;line-height:1.55;color:var(--muted)}
+.cards{display:grid;gap:8px;margin:12px 0}
+.factionCard{width:100%;text-align:left;background:#fdfaf0;border:1px solid var(--line);border-radius:5px;display:flex;gap:10px;align-items:center;padding:9px;color:var(--ink)}
+.factionCard:hover,.factionCard[aria-pressed=true]{border-color:var(--f);background:#f0ecdd}
+.factionCard .flag{width:34px;height:36px;flex:none;box-shadow:none}
+.factionCard strong{display:block;font:700 19px/1.05 var(--serif)}
+.factionCard small{display:block;color:var(--muted);font-size:11px;margin-top:4px;line-height:1.35}
+.primary,.secondary{border-radius:4px;padding:9px 12px;min-height:38px;font-weight:700}
+.primary{background:#314a3d;border:1px solid #23392e;color:#fff7e7}
+.primary:hover:enabled{background:#416350}
+.secondary{background:#f7f1e4;color:var(--ink);border:1px solid var(--line)}
+.secondary:hover:enabled{background:#e9e0cc}
+.full{width:100%}
+.choiceFoot{margin-top:9px;text-align:center}
+.cityHeader{display:flex;justify-content:space-between;align-items:center;gap:10px;margin-bottom:9px}
+.cityHeader h3{font:700 27px/1.1 var(--serif)}
+.badge{font-size:11px;font-weight:700;color:#fff7e7;background:var(--f);border-radius:3px;padding:4px 7px;white-space:nowrap}
+.metrics{display:grid;grid-template-columns:repeat(2,1fr);gap:5px 12px;margin-bottom:11px;font-size:12px}
+.metrics div{display:flex;justify-content:space-between;border-bottom:1px solid var(--line);padding:4px 0;color:var(--muted)}
+.metrics b{color:var(--ink)}
+.actions{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px;margin:8px 0}
+.actions button{font-size:12px;padding:6px}
+select,input[type=number]{width:100%;padding:8px;background:#fffaf0;border:1px solid #c7bca3;color:var(--ink);border-radius:4px}
+.subhead{font-weight:700;font-size:12px;margin:10px 0 6px}
+.officers{display:flex;gap:4px;flex-wrap:wrap;margin-top:5px}
+.officers span{font-size:11px;border:1px solid var(--line);border-radius:3px;padding:2px 6px}
+.turnBox{border-top:1px solid var(--line);padding:10px 15px;background:#f2ebdc}
+.turnBox .hint{text-align:center;margin-top:5px}
+.chronicle{margin-top:14px}
+.log{list-style:none;margin:0;padding:5px 16px 10px;max-height:155px;overflow:auto}
+.log li{display:flex;gap:12px;padding:6px 0;border-bottom:1px solid #e8e0cf;font-size:12px;line-height:1.5}
+.log li:last-child{border-bottom:0}
+.log time{white-space:nowrap;color:#775a33;min-width:82px}
+.notice{position:fixed;bottom:18px;left:50%;transform:translateX(-50%);z-index:8;background:#253a31;color:#fff7e5;border:1px solid #a28d62;padding:10px 16px;border-radius:5px;max-width:90vw;box-shadow:0 3px 15px #0004}
+dialog{background:var(--paper);color:var(--ink);border:1px solid #a8936a;border-radius:7px;width:min(440px,calc(100vw - 26px));max-height:90vh;padding:21px;box-shadow:0 14px 50px #231f1555}
+dialog::backdrop{background:#202820a0}
+dialog h2{font:700 28px var(--serif);margin-bottom:10px}
+dialog p,dialog li{font-size:13px;line-height:1.65}
+dialog ul{padding-left:19px}
+dialog label{display:block;font-size:12px;font-weight:700;margin:10px 0}
+dialog label select,dialog label input{display:block;margin-top:5px}
+.dialogActions{display:flex;justify-content:flex-end;gap:8px;margin-top:14px}
+@media(max-width:830px){.layout{grid-template-columns:minmax(0,1fr) 265px;gap:10px}.wrap{padding:16px 13px}.sideInner{padding:12px}.top{padding:0 13px}}
+@media(max-width:650px){.layout{grid-template-columns:1fr}.map{height:460px}.wrap{padding:15px 10px}.top{height:56px}.brand div{gap:6px}.brand strong{font-size:20px}.brand div span,#status{display:none}.resources{grid-template-columns:repeat(2,1fr)}.resource{padding:6px 10px}.resource:nth-child(3){border-left:0}.resource:nth-child(n+3){border-top:1px solid var(--line)}.flag{width:26px;height:26px}.cityName{font-size:12px;padding:2px 5px}.cityTroops{font-size:9px}.chronicle{margin-top:10px}}
+dialog:has(.rosterGrid){width:min(640px,calc(100vw - 26px))}
+.rosterGrid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+.rosterGroup{border:1px solid var(--line);border-radius:5px;overflow:hidden}
+.rosterGroup h3{display:flex;align-items:center;gap:7px;padding:7px 10px;background:#eee6d5;font-size:14px}
+.rosterGroup h3 span{margin-left:auto;color:var(--muted);font-size:11px;font-weight:500}
+.rosterGroup ul{list-style:none;margin:0;padding:0 9px}
+.rosterGroup li{display:grid;grid-template-columns:minmax(32px,1fr) 37px auto;gap:5px;align-items:center;padding:5px 0;border-bottom:1px solid var(--line)}
+.rosterGroup li:last-child{border-bottom:0}
+.rosterGroup li span,.rosterGroup li small,.rosterGroup p{color:var(--muted);font-size:11px}
+.rosterGroup p{padding:7px 10px}
+@media(max-width:500px){.rosterGrid{grid-template-columns:1fr}.topRight{gap:6px}.topButton{padding:5px 7px}}
+.prisonerButton{margin-bottom:6px}
+dialog .prisonerList{list-style:none;padding:0;margin:12px 0 0}
+.prisonerList li{display:flex;flex-wrap:wrap;justify-content:space-between;align-items:center;gap:6px 12px;border-top:1px solid var(--line);padding:8px 0}
+.prisonerList strong,.prisonerList span{display:block}
+.prisonerList span{font-size:11px;color:var(--muted)}
+.prisonerActions{display:flex;gap:4px}
+.prisonerActions button{font-size:12px;min-height:32px;padding:4px 7px}
+.saveButton{margin-top:8px}
+.saveSlot{background:#eee6d5;border:1px solid var(--line);border-radius:5px;padding:9px 11px;margin:0 0 9px}
+.saveSlot strong{font-size:13px}
+.saveFeedback{color:#385c49}
+.saveFeedback:empty{display:none}
+dialog:has(.battleStage){width:min(520px,calc(100vw - 26px))}
+.battleSides{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:9px}
+.battleSides div:last-child{text-align:right}
+.battleSides span,.battleSides strong{display:block}
+.battleSides span{font-size:11px;color:var(--muted)}
+.battleSides strong{font-size:13px;font-variant-numeric:tabular-nums}
+.battleStage{position:relative;isolation:isolate;overflow:hidden;height:184px;border:1px solid #897452;border-radius:5px;background:linear-gradient(0deg,#211b1499,#382c1744),url("terrain.jpg") center 58%/cover #776446}
+.battleArmy{position:absolute;inset:0 50% 0 0;display:grid;place-content:center;justify-items:center;gap:10px;--entry:-55%;--advance:40%;--retreat:-22%;animation:battleAdvance 1.4s cubic-bezier(.2,.7,.3,1) both}
+.battleDefender{inset:0 0 0 50%;--entry:55%;--advance:-40%;--retreat:22%}
+.battleArmy .flag{width:42px;height:49px;font-size:25px;border-color:#f6dc9b;box-shadow:0 3px 10px #21170bcc}
+.battleRanks{display:grid;grid-template-columns:repeat(5,8px);gap:4px}
+.battleRanks i{width:8px;height:10px;border:1px solid #ead3a4;border-radius:4px 4px 1px 1px;background:var(--f);box-shadow:0 1px 3px #21170b}
+.battleClash{position:absolute;top:50%;left:50%;width:24px;height:24px;border:2px solid #f4d69c;border-radius:50%;box-shadow:0 0 20px #f4d69c;opacity:0;animation:battleClash .45s ease-out .78s both}
+.battleStage[data-outcome] .battleArmy{animation:none;transform:translateX(var(--advance))}
+.battleStage[data-outcome] .battleClash{animation:none}
+.battleStage[data-outcome=win] .battleDefender,.battleStage[data-outcome=loss] .battleAttacker{opacity:.33;transform:translateX(var(--retreat))}
+.battleResult{display:grid;align-content:center;justify-items:center;gap:3px;min-height:78px;margin-top:9px;background:#eee6d5;border:1px solid var(--line);border-radius:4px;padding:6px;text-align:center}
+.battleResult strong{font:700 20px var(--serif)}
+.battleResult span{font-size:12px;color:var(--muted)}
+@keyframes battleAdvance{0%{transform:translateX(var(--entry));opacity:.15}58%{transform:translateX(var(--advance));opacity:1}73%{transform:translateX(calc(var(--advance) * .6))}100%{transform:translateX(var(--advance))}}
+@keyframes battleClash{0%{transform:translate(-50%,-50%) scale(.45);opacity:0}23%{opacity:.7}100%{transform:translate(-50%,-50%) scale(3);opacity:0}}
+@media(prefers-reduced-motion:reduce){.battleArmy,.battleClash{animation:none}}
+.flag.neutralFlag{background:#fff;color:#363a34;border-color:#746f61}
+.dot.neutralDot{background:#fff;border:1px solid #746f61}
+.seasonEvent{display:flex;flex-wrap:wrap;align-items:baseline;gap:4px 12px;margin:0 0 12px;padding:9px 14px;border:1px solid #b5c3ac;border-left:4px solid #5c7952;border-radius:4px;background:#eef1e6;color:#2f4730}
+.seasonEvent.eventLoss{border-color:#dac1a8;border-left-color:#9a553c;background:#f5ebe1;color:#653b2d}
+.seasonEvent strong{font-size:13px}
+.seasonEvent span{font-size:12px}
+dialog:has(.marchPlanner){width:min(540px,calc(100vw - 24px));max-height:min(90vh,calc(100dvh - 24px))}
+.marchPlanner{display:grid;gap:10px}
+.marchRoute{display:grid;grid-template-columns:minmax(0,1fr) 24px minmax(0,1fr);align-items:center}
+.marchPlanner .marchPlace{display:flex;flex-direction:column;justify-content:center;align-self:stretch;gap:3px;margin:0;min-width:0;min-height:76px;padding:8px 10px;border:1px solid var(--line);border-radius:5px;background:#f0e8d8}
+.marchPlace strong{font:700 21px/1 var(--serif)}
+.marchPlace small{color:var(--muted);font-size:11px}
+.marchPlanner .marchPlace select{margin:0;padding:6px;min-width:0;min-height:34px}
+.marchLabel{color:var(--muted);font-weight:700;font-size:11px}
+.marchArrow{text-align:center;color:#7c6949;font-size:19px}
+.marchPlanner .marchPath{margin:-3px 0 0;color:#4f5f4d;font-size:12px;text-align:center}
+.marchPlanner .marchCommander{margin:0}
+.marchPlanner .marchCommander select{margin-top:3px}
+.marchTroops{border:1px solid var(--line);border-radius:5px;padding:8px 10px}
+.marchTroopHead,.marchAmount,.marchRange,.marchForecastLead{display:flex;align-items:center;gap:8px}
+.marchTroopHead,.marchForecastLead{justify-content:space-between}
+.marchTroopHead label{margin:0}
+.marchAmount input[type=number]{width:84px;padding:5px 7px;font-weight:700;text-align:right}
+.marchAmount span,.marchRange span{font-size:11px;color:var(--muted);font-variant-numeric:tabular-nums}
+.marchRange input{flex:1;min-width:0;height:24px;margin:4px 0;accent-color:#385c49}
+.marchPresets{display:flex;gap:5px;justify-content:flex-end}
+.marchPresets button{padding:4px 10px;min-height:30px;font-size:11px}
+.marchPresets button[aria-pressed=true]:enabled{color:#fff6e7;background:var(--forest);border-color:var(--forest)}
+.marchForecast{padding:9px 10px;border-radius:5px;border:1px solid #c6cbb6;background:#eef0e4}
+.marchForecastLead span{font-weight:700;font-size:12px;color:#405743}
+.marchOutcome{font:700 20px/1.15 var(--serif);color:#263b2d}
+.marchForecast progress{display:block;width:100%;height:7px;margin:7px 0;accent-color:#4c7158}
+.marchForecast dl{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));margin:7px 0 0;border-top:1px solid #d2d6c2;padding-top:6px}
+.marchForecast dl div+div{border-left:1px solid #d2d6c2;padding-left:9px}
+.marchForecast dt{color:#545e4f;font-size:10px}
+.marchForecast dd{margin:2px 0 0;font-size:13px;font-weight:700;font-variant-numeric:tabular-nums}
+.marchPlanner .marchError{color:#8a432d;font-size:12px}
+dialog:has(.marchPlanner) [type=submit]{min-width:104px}
+.transferList{border-top:1px solid var(--line);padding:10px 15px}
+.transferList h3{font-size:12px}
+.transferList ul{list-style:none;margin:4px 0 0;padding:0}
+.transferList li{padding:5px 0;font-size:11px}
+.transferList li+li{border-top:1px solid var(--line)}
+.transferList span{display:block;color:var(--muted)}
+@media(max-width:480px){dialog:has(.marchPlanner){padding:14px}.marchPlanner .marchPlace{padding:7px}.marchRoute{grid-template-columns:minmax(0,1fr) 20px minmax(0,1fr)}}
+.scenarioPicker{display:block;font-size:12px;font-weight:700;color:var(--muted)}
+.scenarioPicker select{margin-top:4px}
+.rulerHeading{margin-top:13px;font:700 17px var(--serif)}
+.factionCard span:last-child{min-width:0}
+.freeBadge{display:inline-grid;place-items:center;min-width:17px;height:17px;padding:0 3px;border-radius:10px;border:1px solid #6f4826;background:#ffe3a0;color:#492d18;font:800 10px/1 var(--sans)}
+.city .freeBadge{position:absolute;top:-3px;left:calc(50% + 10px);box-shadow:0 1px 3px #30250f55}
+.legendFree{font-style:normal}
+.actions [data-domestic=persuade],.actions [data-domestic=hire]{grid-column:1/-1}
+.actions.singleAction{grid-template-columns:1fr}
+.mapArmy,.mapImpact{position:absolute;z-index:5;pointer-events:none;transform:translate(-50%,calc(-50% - 11px))}
+.mapArmy{display:grid;justify-items:center;gap:3px;filter:drop-shadow(0 2px 2px #32271891)}
+.mapArmy .flag{width:25px;height:29px;color:#fff5d2;border:1px solid #ffe49f;font-size:15px;box-shadow:0 0 0 2px #4d3527}
+.mapRanks{display:grid;grid-template-columns:repeat(3,5px);gap:2px}
+.mapRanks i{width:5px;height:6px;border:1px solid #f7dda4;border-radius:2px 2px 0 0;background:var(--f)}
+.mapImpact{width:44px;height:44px;border:3px solid #ffe3a0;border-radius:50%;box-shadow:0 0 10px #633b23}
+.attackMarch{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:8px;padding:8px 12px;background:#efe4cd;border-bottom:1px solid var(--line);color:#493620;font-size:13px;font-weight:700}
+.attackMarch .primary{min-height:34px;padding:5px 10px;font-size:12px}
+.battleDefeatMessage{font-size:13px;color:#88422c;margin-top:3px}
+#factionDefeats{font-size:13px;font-weight:700}
+
+/* 주장·부장 선택과 전투 조합 표시 */
+.marchPlanner .marchGenerals{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+.marchPlanner .marchMatchup{display:grid;gap:2px;margin:-2px 0 0;color:#4f5f4d;font-size:12px;line-height:1.45}
+.marchPlanner .marchMatchup:empty{display:none}
+.battleSides .battleTeam{display:block;margin-top:2px;color:inherit;opacity:.78;font-size:11px;line-height:1.4}
+@media (max-width:420px){.marchPlanner .marchGenerals{grid-template-columns:1fr}}
+
+/* 병력 이동 시 함께 옮길 금·군량 */
+.marchPlanner .marchCargo{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin:0;border:1px solid var(--line);border-radius:5px;padding:8px 10px}
+.marchPlanner .marchCargo legend{padding:0 4px}
+.marchPlanner .marchCargo label{display:grid;gap:3px;margin:0}
+.marchPlanner .marchCargo label>span{font-size:12px;color:var(--muted)}
+.marchPlanner .marchCargo input{width:100%;box-sizing:border-box;text-align:right}
+.marchPlanner .marchCargo input[aria-invalid=true]{border-color:#a5432f}
+.marchPlanner .marchCargo small{color:var(--muted);font-size:11px}
+.linkButton{border:0;background:none;padding:0;color:var(--green);text-decoration:underline;font-size:inherit}
+@media (max-width:420px){.marchPlanner .marchCargo{grid-template-columns:1fr}}
+
+/* 도시 항목의 현재값 / 최대치 */
+.metrics b small{font-size:11px;font-weight:500;color:var(--muted)}
+.metrics .atCap b{color:#8a6420}
+.metrics .overCap b,.metrics .overCap b small{color:#a5432f}
+
+/* 작전 회의 */
+.actions .councilButton{grid-column:1/-1}
+.councilList{list-style:none;margin:4px 0 10px;padding:0;display:grid;gap:3px}
+.councilList li{display:flex;justify-content:space-between;border-bottom:1px solid var(--line);padding:4px 0}
+.councilList span{color:var(--muted)}
+.councilAdvice{margin:8px 0 0;padding-left:18px;display:grid;gap:6px;line-height:1.5}
+.councilAdvice{list-style:none;padding:0}
+.councilAdvice li{border:1px solid var(--line);border-radius:5px;padding:8px 10px;display:grid;gap:5px}
+.councilAdvice li>b{font-size:12px;color:var(--gold)}
+.councilAdvice li>p{margin:0}
+.councilAdvice .adviceButton{justify-self:start;padding:6px 10px;text-align:left}
+
+/* 위임 */
+.delegation{grid-column:1/-1;margin:0;padding:6px 8px;border-radius:5px;background:#eef1e6;color:#3f5544;font-size:12px}
+.actions .delegateButton{grid-column:1/-1}
+.full{width:100%}
+
+/* 지도 위 성 아이콘을 작게: 도시가 많아도 겹치지 않도록 */
+.city{gap:1px}
+.city .flag{width:22px;height:22px;font-size:12px;border-radius:3px;box-shadow:0 1px 4px #30250f69}
+.city.active .flag{outline-width:2px;outline-offset:1px}
+.city .cityName{font-size:11px;padding:1px 5px;border-radius:3px}
+.city .cityTroops{font-size:9px;padding:1px 4px}
+.city .freeBadge{top:-4px;left:calc(50% + 7px);transform:scale(.85)}
+@media(max-width:650px){.city .flag{width:19px;height:19px;font-size:11px}.city .cityName{font-size:10px;padding:1px 4px}.city .cityTroops{font-size:8px}}
+
+/* 황제 거처 */
+.emperorBadge{display:grid;place-items:center;width:15px;height:15px;border-radius:50%;background:#c9952e;color:#2b1d07;border:1px solid #fff1c4;font:700 9px var(--serif);box-shadow:0 1px 3px #30250f66}
+.city .emperorBadge{position:absolute;top:-5px;right:calc(50% + 7px)}
+.legendEmperor{display:inline-grid;margin-right:4px;vertical-align:-3px;font-style:normal}
+
+/* 새 버전 안내 */
+.updateNotice{position:fixed;left:50%;bottom:18px;transform:translateX(-50%);z-index:20;display:flex;gap:10px;align-items:center;padding:9px 12px;border-radius:6px;background:#283029f2;color:#fff7e4;box-shadow:0 4px 14px #0005;font-size:13px}
+.updateNotice[hidden]{display:none}
+.updateNotice button{padding:5px 10px}
+
+/* 군단 */
+.corpsList{list-style:none;padding:0;margin:4px 0 10px;display:grid;gap:6px}
+.corpsList li{display:flex;justify-content:space-between;gap:8px;align-items:center;border:1px solid var(--line);border-radius:5px;padding:7px 9px}
+.corpsList small{display:block;color:var(--muted);font-size:11px;margin-top:2px}
+.corpsCities{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:4px 8px;border:1px solid var(--line);border-radius:5px;padding:8px 10px;margin:0;max-height:220px;overflow:auto}
+.corpsCities label{display:flex;gap:4px;align-items:center;margin:0;font-size:13px}
+.corpsCities small{color:var(--muted);font-size:10px;margin-left:auto}
+.corpsButton{margin-top:6px}
+.marchCap{margin:4px 0 0;font-size:11px}
