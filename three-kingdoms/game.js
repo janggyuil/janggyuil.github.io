@@ -541,6 +541,7 @@ const domestic = {
     if (random()*100>=this.chance(o,target,emperorBonus(s,c.owner))) return `${target.name} 등용에 실패했습니다.`;
     target.city=o.city;
     delete target.freeCity;
+    markFormerRulers(s);
     return `${target.name}이(가) 합류했습니다.`;
   }},
   persuade:{label:'적장 회유',cost:160,targets:persuasionTargets,empty:'인접 적 도시에 회유할 장수가 없습니다.',chance:persuasionChance,run(s,c,o,target,random) {
@@ -915,6 +916,18 @@ function applyDomestic(s,id,key,officerId,targetId,random=Math.random) {
   return true;
 }
 
+// 길(도로)을 따라 두 도시 사이의 칸 수(소속과 관계없이). 이어지지 않으면 Infinity
+function roadDistance(from,to) {
+  if (from===to) return 0;
+  const seen=new Set([from]);
+  let frontier=[from], d=0;
+  while (frontier.length) {
+    d++;
+    frontier=frontier.flatMap(id=>neighbors(id)).filter(id=>!seen.has(id) && seen.add(id));
+    if (frontier.includes(to)) return d;
+  }
+  return Infinity;
+}
 // 길(도로)을 따라 from에서 가장 가까운 faction의 도시. from이 그 세력 도시면 from입니다.
 function nearestOwned(s,faction,from) {
   const seen=new Set([from]);
@@ -940,6 +953,7 @@ function resolveCaptive(s,id,decision) {
       const destination=captiveDestination(s,officer);
       if (!destination) return false;
       officer.city=destination;
+      markFormerRulers(s);
       result=destination===city?`등용 · 포획한 ${towns[city].name}에 배치했습니다.`:
         `등용 · ${towns[city].name}을(를) 잃어 가장 가까운 ${towns[destination].name}에 배치했습니다.`;
       break;
@@ -973,7 +987,18 @@ const RANKS = [
   {name:'대장군',merit:500,troops:10000}
 ];
 const RULER_RANK = {name:'군주',merit:Infinity,troops:15000};
-const isRulerOfficer = o => Object.values(factions).some(f=>f.name===o.name);
+// 다른 세력에 등용된 옛 군주(formerRuler)는 군주 등급이 아니라 공적에 따른 등급을 씁니다.
+const isRulerOfficer = o => !o.formerRuler && Object.values(factions).some(f=>f.name===o.name);
+const factionIdByName = name => Object.keys(factions).find(id=>factions[id].name===name);
+// 장수가 지금 속한 세력이 자기 이름의 세력이 아니면 옛 군주로 표시합니다(등용·옛 저장 보정).
+function markFormerRulers(s) {
+  for (const o of s.officers) {
+    const own=factionIdByName(o.name);
+    if (!own || o.formerRuler) continue;
+    const now=o.inTransit || (o.city && s.cities[o.city]?.owner);
+    if (now && now!==own) o.formerRuler=true;
+  }
+}
 // 공적이 없던 장수는 통솔·무력·지력 평균으로 처음 공적을 정합니다.
 const initialMerit = o => Math.max(0,Math.round(((o.lead+o.war+o.intel)/3-50)*10));
 const meritOf = o => o.merit??initialMerit(o);
@@ -1247,6 +1272,71 @@ function moveOfficers(s,from,to,officerIds) {
   s.ap--;
   return true;
 }
+// ── 소환 ──────────────────────────────────────────────
+// 군주가 다른 아군 도시의 장수를 군주 곁으로 부릅니다. 명령 1회, 다음 달 도착.
+// 위임 도시의 성주나 군단 도독을 부르면 역할을 이어받을 장수를 정해야 합니다(그 도시·군단에 남는 장수 중에서).
+function summonRole(s,officer) {
+  const corps=(s.corps??[]).find(k=>k.commander===officer.id);
+  if (corps) return {type:'corps',corps};
+  const city=s.cities[officer.city];
+  if (city?.delegated && city.corps===undefined && city.governor===officer.id) return {type:'governor',city:officer.city};
+  return null;
+}
+// 역할을 이어받을 수 있는 장수. leaving은 함께 불려 가는 장수 ID 집합입니다.
+function summonSuccessors(s,officer,leaving=new Set()) {
+  const role=summonRole(s,officer);
+  if (!role) return [];
+  const ruler=rulerOf(s,s.player);
+  // 능력이 높은 장수(도독은 공적이 높은 장수)부터 보여 줍니다.
+  const total=o=>o.lead+o.war+o.intel+o.politics+o.charm;
+  if (role.type==='governor') return officersAt(s,role.city).filter(o=>o!==officer && !leaving.has(o.id)).sort((a,b)=>total(b)-total(a));
+  const busy=new Set((s.corps??[]).map(k=>k.commander));
+  return role.corps.cities.flatMap(id=>officersAt(s,id)).filter(o=>o!==officer && o!==ruler && !leaving.has(o.id) && !busy.has(o.id))
+    .sort((a,b)=>meritOf(b)-meritOf(a) || total(b)-total(a));
+}
+// 소환할 수 있는 장수: 군주가 아군 도시에 있을 때, 다른 아군 도시에 있는 장수
+function summonCandidates(s) {
+  const ruler=rulerOf(s,s.player);
+  if (!ruler?.city || s.cities[ruler.city].owner!==s.player) return [];
+  return s.officers.filter(o=>o.city && o.city!==ruler.city && s.cities[o.city].owner===s.player && !o.captive);
+}
+// successors: {장수 ID: 후임 장수 ID}. 후임 후보가 있는데 정하지 않으면 실패합니다. 후보가 없으면 위임은 풀리고 군단은 해산합니다.
+function summonOfficers(s,officerIds,successors={}) {
+  const ruler=rulerOf(s,s.player);
+  if (!s.ap || s.end || !ruler?.city) return false;
+  const to=ruler.city;
+  const ids=[...new Set([].concat(officerIds))];
+  const candidates=new Set(summonCandidates(s).map(o=>o.id));
+  if (!ids.length || !ids.every(id=>candidates.has(id))) return false;
+  const leaving=new Set(ids);
+  const officers=ids.map(id=>s.officers.find(o=>o.id===id));
+  const handovers=[];
+  for (const officer of officers) {
+    const role=summonRole(s,officer);
+    if (!role) continue;
+    const options=summonSuccessors(s,officer,leaving);
+    const next=options.find(o=>o.id===successors[officer.id]);
+    if (options.length && !next) return false;
+    handovers.push({officer,role,next});
+  }
+  for (const {officer,role,next} of handovers) {
+    if (role.type==='governor') {
+      const c=s.cities[role.city];
+      if (next) { c.governor=next.id; record(s,`[소환] ${towns[role.city].name} 성주를 ${officer.name}에서 ${next.name}(${delegateStyle(next)}형)(으)로 바꿨습니다.`); }
+      else { delete c.delegated; delete c.governor; record(s,`[소환] ${towns[role.city].name}에 남는 장수가 없어 위임을 풀었습니다.`); }
+    } else if (next) {
+      role.corps.commander=next.id;
+      record(s,`[소환] ${corpsName(s,role.corps.id)} 도독을 ${officer.name}에서 ${next.name}(${rankOf(next).name})(으)로 바꿨습니다.`);
+    } else disbandCorps(s,role.corps.id,`도독 ${officer.name}이(가) 군주에게 불려 가`);
+  }
+  const groups=new Map();
+  for (const officer of officers) groups.set(officer.city,[...(groups.get(officer.city)??[]),officer.id]);
+  for (const [from,group] of groups) sendOfficers(s,from,to,group);
+  s.ap--;
+  record(s,`[소환] 군주 ${ruler.name}이(가) ${teamNames(officers)}을(를) ${towns[to].name}(으)로 불렀습니다. ${date(s.month+OFFICER_MOVE_TURNS)} 도착 예정.`);
+  return true;
+}
+
 // 명령을 쓰지 않는 장수 이동입니다. 군단 도독의 장수 재배치도 이것을 씁니다.
 function sendOfficers(s,from,to,officerIds) {
   const a=s.cities[from], b=s.cities[to];
@@ -1442,7 +1532,7 @@ function advance(s,random=Math.random) {
   }
 }
 
-if (typeof module!=='undefined') module.exports={factions,playable,scenarios,freeCityOf,seasonFor,applySeasonEvent,towns,roads,roster,owned,neighbors,friendlyRoutes,officersAt,factionOfficers,captives,resolveCaptive,nearestOwned,newGame,unavailable,persuasionTargets,persuasionChance,applyDomestic,march,advance,power,levyAmount,formCorps,disbandCorps,corpsCandidates,corpsBlockedGenerals,corpsFreeCities,corpsPromptDue,corpsById,corpsName,CORPS_PROMPT_CITIES,RANKS,rankOf,meritOf,commandCap,addMerit,attackCapacity,migrateOfficers,extraOfficers,isFrontline,rearReserve,convoyPlan,sendConvoy,emperorSeat,emperorHolder,emperorBonus,updateEmperor,EMPEROR_MOVE,EMPEROR_GOLD,delegateStyle,delegationUnavailable,setDelegation,delegatePlan,delegateTurn,governorOf,DELEGATE_STYLES,goldIncome,holdCouncil,followAdvice,adviceUnavailable,marchCapacity,councilUnavailable,councilAdvisors,councilQuality,activeCouncil,rulerOf,COUNCIL_GRADES,cargoLimit,cityCaps,gain,battleTeam,bestTeam,defendingTeam,statsOf,MAX_GENERALS,moveOfficers,OFFICER_MOVE_TURNS,sendOfficers,corpsOfficerPlan,corpsOfficerTurn,joinCorps,corpsCommander};
+if (typeof module!=='undefined') module.exports={factions,playable,scenarios,freeCityOf,seasonFor,applySeasonEvent,towns,roads,roster,owned,neighbors,friendlyRoutes,officersAt,factionOfficers,captives,resolveCaptive,nearestOwned,roadDistance,newGame,unavailable,persuasionTargets,persuasionChance,applyDomestic,march,advance,power,levyAmount,formCorps,disbandCorps,corpsCandidates,corpsBlockedGenerals,corpsFreeCities,corpsPromptDue,corpsById,corpsName,CORPS_PROMPT_CITIES,RANKS,rankOf,meritOf,markFormerRulers,commandCap,addMerit,attackCapacity,migrateOfficers,extraOfficers,isFrontline,rearReserve,convoyPlan,sendConvoy,emperorSeat,emperorHolder,emperorBonus,updateEmperor,EMPEROR_MOVE,EMPEROR_GOLD,delegateStyle,delegationUnavailable,setDelegation,delegatePlan,delegateTurn,governorOf,DELEGATE_STYLES,goldIncome,holdCouncil,followAdvice,adviceUnavailable,marchCapacity,councilUnavailable,councilAdvisors,councilQuality,activeCouncil,rulerOf,COUNCIL_GRADES,cargoLimit,cityCaps,gain,battleTeam,bestTeam,defendingTeam,statsOf,MAX_GENERALS,moveOfficers,OFFICER_MOVE_TURNS,sendOfficers,summonRole,summonSuccessors,summonCandidates,summonOfficers,corpsOfficerPlan,corpsOfficerTurn,joinCorps,corpsCommander};
 
 if (typeof document!=='undefined') {
   const $=id=>document.getElementById(id);
@@ -1475,6 +1565,7 @@ if (typeof document!=='undefined') {
       if (!raw.end) raw.ap=clamp(raw.ap+COMMANDS_PER_MONTH-savedLimit,0,COMMANDS_PER_MONTH);
       raw.commandLimit=COMMANDS_PER_MONTH;
       raw.transfers??=[];
+      markFormerRulers(raw);
       // 통솔·지력이 없던 저장은 장수 이름 기준으로 능력치를 채웁니다.
       for (const officer of raw.officers) {
         if ([officer.lead,officer.intel,officer.charm].includes(undefined)) Object.assign(officer,statsOf(officer.name));
@@ -1610,6 +1701,10 @@ if (typeof document!=='undefined') {
     const origins=connected.filter(id=>state.cities[id].owner===state.player && officersAt(state,id).length &&
       state.cities[id].troops>=350 && state.cities[id].food>=20);
     const isRival=Boolean(c.owner && !ours);
+    const freeHere=state.player?state.officers.filter(o=>isFree(o) && freeCityOf(state,o)===selected):[];
+    // 다른 지역의 재야 인재를 등용할 아군 도시(담당 장수가 있고 금 30 이상), 가까운 곳부터
+    const hireOrigins=freeHere.length&&!ours?owned(state).filter(id=>!unavailable(state,id,'hire'))
+      .sort((a,b)=>roadDistance(a,selected)-roadDistance(b,selected)):[];
     const canPersuade=isRival && persuasionOrigins(state,selected).length>0;
     const persuasionReason=()=>{
       if (!state.ap || state.end) return '이번 달에 사용할 명령이 없습니다.';
@@ -1622,6 +1717,7 @@ if (typeof document!=='undefined') {
         .map(([label,key])=>`<div class="${c[key]>caps[key]?'overCap':c[key]>=caps[key]?'atCap':''}"><span>${label}</span><b>${fmt(c[key])}<small> / ${fmt(caps[key])}</small></b></div>`).join('');})()}</div>
       <div class="subhead">주둔 장수 · ${generals.length}명</div>
       <div class="officers">${generals.map(o=>`<span title="${statLine(o)}">${escapeText(o.name)}</span>`).join('')||'<span>없음</span>'}</div>
+      ${freeHere.length?`<div class="subhead">재야 인재 · ${freeHere.length}명</div><div class="officers freeOfficers">${freeHere.map(o=>`<span title="${statLine(o)}">${escapeText(o.name)}</span>`).join('')}</div>`:''}
       ${ours?`<div class="actions">${Object.entries(domestic).map(([key,a])=>{
         const reason=unavailable(state,selected,key);
         return `<button class="secondary" data-domestic="${key}" ${reason?'disabled':''} title="${reason||a.label}">${a.label} · ${a.cost}금</button>`;
@@ -1646,9 +1742,11 @@ if (typeof document!=='undefined') {
           return ruler?.city===selected||held?.city===selected?`<button class="secondary councilButton" data-council ${reason&&!held?'disabled':''} title="${held?'회의 의견 다시 보기':reason||'군주와 참모가 작전을 논의합니다 · 명령 1회'}">${held?`작전 회의 · ${held.grade}${held.bonus?` 공격 +${Math.round(held.bonus*100)}%`:''} · 의견 보기`:'작전 회의 · 명령 1회'}</button>`:'';})()}
         <button class="secondary" data-march ${hasMarch&&attackTargets.length?'':'disabled'}>출진</button>
         <button class="secondary" data-transfer ${hasMarch&&transferTargets.size?'':'disabled'}>병력 이동</button>
+        ${rulerOf(state,state.player)?.city===selected?`<button class="secondary officerMoveButton" data-summon ${state.ap&&!state.end&&summonCandidates(state).length?'':'disabled'} title="다른 도시의 장수를 군주 곁으로 부릅니다 · 다음 달 도착 · 명령 1회">장수 소환 · 다음 달 도착</button>`:''}
         <button class="secondary officerMoveButton" data-officer-move ${ours&&state.ap&&!state.end&&generals.length&&owned(state).length>1?'':'disabled'} title="장수만 아군 도시 어디로든 보냅니다 · 다음 달 도착 · 명령 1회">장수 이동 · 다음 달 도착</button></div>${!generals.length?'<p class="hint choiceFoot">인접 도시에서 장수와 병력을 보내세요.</p>':''}`
       :`<div class="actions${isRival?'':' singleAction'}"><button class="secondary full" data-invade ${origins.length&&state.ap&&!state.end?'':'disabled'}>이 도시 공격</button>
-        ${isRival?`<button class="secondary full" data-persuade-city ${canPersuade?'':'disabled'}>적장 회유 · 160금</button>`:''}</div>
+        ${isRival?`<button class="secondary full" data-persuade-city ${canPersuade?'':'disabled'}>적장 회유 · 160금</button>`:''}
+        ${freeHere.length?`<button class="secondary full" data-hire-city ${hireOrigins.length?'':'disabled'} title="아군 도시에서 사람을 보내 이 지역의 재야 인재를 등용합니다 · 명령 1회">이 지역 재야 등용 · 30금</button>`:''}</div>
         ${isRival&&!canPersuade?`<p class="hint">회유 조건 · ${persuasionReason()}</p>`:''}
         <p class="hint">연결 도시 · ${connected.map(id=>towns[id].name).join(', ')}</p>`}
       </div><div class="turnBox">${prisonerCount?`<button class="secondary full prisonerButton" data-captives>포로 ${prisonerCount}명</button>`:''}<button class="primary full" data-advance ${state.end?'disabled':''}>${state.end==='won'?'천하 통일':state.end==='lost'?'세력 멸망':'다음 달 →'}</button>
@@ -1884,6 +1982,52 @@ if (typeof document!=='undefined') {
     };
   }
 
+  // 군주가 다른 도시의 장수를 부릅니다. 성주·도독이면 후임을 정합니다.
+  function openSummon() {
+    const ruler=rulerOf(state,state.player);
+    const to=ruler.city;
+    const candidates=summonCandidates(state);
+    const cities=[...new Set(candidates.map(o=>o.city))].sort((a,b)=>roadDistance(to,a)-roadDistance(to,b));
+    const roleText=o=>{const r=summonRole(state,o);return r?r.type==='corps'?`${corpsName(state,r.corps.id)} 도독`:'성주':'';};
+    const row=o=>{const r=summonRole(state,o);const options=summonSuccessors(state,o);
+      return `<label data-row="${o.id}"><input type="checkbox" name="officer" value="${o.id}"><span><strong>${escapeText(o.name)}</strong>${r?` <em>${roleText(o)}</em>`:''}<small>${statLine(o)}</small>
+        ${r?options.length?`<span class="successor" hidden>후임 ${r.type==='corps'?'도독':'성주'}<select name="successor-${o.id}"></select></span>`:
+          `<small class="successorNote" hidden>${r.type==='corps'?'남는 장수가 없어 군단이 해산됩니다.':'남는 장수가 없어 위임이 풀립니다.'}</small>`:''}</span></label>`;};
+    show(`장수 소환 · ${towns[to].name}`,`
+      <p>군주 ${escapeText(ruler.name)}이(가) 다른 도시의 장수를 ${towns[to].name}(으)로 부릅니다. 거리와 관계없이 <strong>다음 달</strong>에 도착하며 명령 1회를 씁니다. 성주나 도독을 부르면 그 역할을 이어받을 장수를 정하세요.</p>
+      ${cities.map(id=>`<div class="subhead">${towns[id].name} · ${roadDistance(to,id)}칸${state.cities[id].corps!==undefined&&corpsById(state,state.cities[id].corps)?` · ${corpsName(state,state.cities[id].corps)}`:state.cities[id].delegated?' · 위임':''}</div>
+        <div class="moveList">${candidates.filter(o=>o.city===id).map(row).join('')}</div>`).join('')}
+      <p class="hint marchError" hidden></p>`,
+      '소환하기',form=>{
+        const ids=new FormData(form).getAll('officer').map(Number);
+        const successors={};
+        for (const id of ids) { const sel=form.elements[`successor-${id}`]; if (sel) successors[id]=Number(sel.value); }
+        const error=form.querySelector('.marchError');
+        if (!ids.length) { error.textContent='부를 장수를 한 명 이상 고르세요.'; error.hidden=false; return false; }
+        if (!summonOfficers(state,ids,successors)) { error.textContent='후임을 다시 확인하세요. 함께 부르는 장수는 후임이 될 수 없습니다.'; error.hidden=false; return false; }
+        commit(false);
+        notify(state.log[0].message);
+      });
+    const form=$('dialogBody').firstElementChild;
+    // 체크한 장수에 맞춰 후임 선택지를 다시 만듭니다(함께 부르는 장수는 후임에서 뺍니다).
+    const refresh=()=>{
+      const leaving=new Set(new FormData(form).getAll('officer').map(Number));
+      for (const o of candidates) {
+        const label=form.querySelector(`[data-row="${o.id}"]`);
+        const checked=leaving.has(o.id);
+        const box=label.querySelector('.successor'), note=label.querySelector('.successorNote');
+        if (note) note.hidden=!checked;
+        if (!box) continue;
+        box.hidden=!checked;
+        const sel=box.querySelector('select'), prev=sel.value===''?null:Number(sel.value);
+        const options=summonSuccessors(state,o,leaving);
+        sel.innerHTML=options.length?options.map(x=>`<option value="${x.id}" ${x.id===prev?'selected':''}>${escapeText(x.name)} · ${towns[x.city].name} · ${rankOf(x).name} · ${delegateStyle(x)}형</option>`).join(''):'<option value="">남는 장수 없음 · 해산/위임 해제</option>';
+      }
+    };
+    form.addEventListener('change',event=>{ if (event.target.name==='officer') refresh(); });
+    refresh();
+  }
+
   // 장수만 다른 아군 도시로 보냅니다. 거리와 관계없이 다음 달에 도착합니다.
   function openOfficerMove(id) {
     const generals=officersAt(state,id);
@@ -1970,12 +2114,18 @@ if (typeof document!=='undefined') {
     let id=origins[0];
     const action=domestic[key];
     const getGenerals=()=>officersAt(state,id).sort((a,b)=>domesticSkill(key,b)-domesticSkill(key,a));
-    const getTargets=()=>action.targets?.(state,id).filter(o=>!targetCity || o.city===targetCity);
+    const placeOf=o=>key==='hire'?freeCityOf(state,o):o.city;
+    const getTargets=()=>{
+      const list=action.targets?.(state,id).filter(o=>!targetCity || placeOf(o)===targetCity);
+      // 재야 등용은 출발 도시에서 가까운 인재부터 보여 줍니다.
+      return key==='hire'?list?.sort((a,b)=>roadDistance(id,placeOf(a))-roadDistance(id,placeOf(b)) || b.charm-a.charm):list;
+    };
     let generals=getGenerals(), targets=getTargets();
     const persuasion=key==='persuade';
     const targetOptions=()=>persuasion?targets.map(o=>
       `<option value="${o.id}">${escapeText(o.name)} · ${towns[o.city].name} · 지력 ${o.intel}</option>`
-    ).join(''):options(targets??[]);
+    ).join(''):key==='hire'?targets.map(o=>{const at=placeOf(o),d=roadDistance(id,at);
+      return `<option value="${o.id}">${escapeText(o.name)} · ${towns[at]?.name??'?'}${d===0?'(이 도시)':Number.isFinite(d)?`(${d}칸)`:''} · 매력 ${o.charm} · ${statLine(o)}</option>`;}).join(''):options(targets??[]);
     show(action.label,`<p>${origins.length===1?`${towns[id].name} · `:''}금 ${action.cost} · 명령 1회</p>
       ${origins.length>1?`<label>출발 도시<select name="origin">${origins.map(city=>
         `<option value="${city}">${towns[city].name}</option>`).join('')}</select></label>`:''}
@@ -1984,7 +2134,7 @@ if (typeof document!=='undefined') {
       ${action.chance?`<div class="marchForecast">
         <div class="marchForecastLead"><span>예상 성공률</span><strong class="marchOutcome" role="status"></strong></div>
         <progress max="100" value="0" aria-label="예상 성공률"></progress>
-        <p class="hint">${persuasion?'책사의 지력':'담당 장수의 매력'}이 상대보다 높을수록 성공률이 오릅니다.${emperorBonus(state,state.player)?` 황제를 옹위해 +${emperorBonus(state,state.player)}%가 더해집니다.`:''}</p>
+        <p class="hint">${persuasion?'책사의 지력':'담당 장수의 매력'}이 상대보다 높을수록 성공률이 오릅니다.${key==='hire'?' 재야 인재는 거리와 관계없이 어느 지역에서든 등용할 수 있고, 등용하면 출발 도시에 합류합니다.':''}${emperorBonus(state,state.player)?` 황제를 옹위해 +${emperorBonus(state,state.player)}%가 더해집니다.`:''}</p>
       </div>`:''}`,
     persuasion?'회유 시도':key==='hire'?'등용 시도':'명령 실행',form=>{
       const data=new FormData(form);
@@ -2406,6 +2556,8 @@ if (typeof document!=='undefined') {
       else openCouncil(selected);
     } else if (button.hasAttribute('data-march')) {
       openMarch([selected],neighbors(selected).filter(id=>state.cities[id].owner!==state.player));
+    } else if (button.hasAttribute('data-summon')) {
+      openSummon();
     } else if (button.hasAttribute('data-officer-move')) {
       openOfficerMove(selected);
     } else if (button.hasAttribute('data-transfer')) {
@@ -2414,6 +2566,9 @@ if (typeof document!=='undefined') {
       const origins=neighbors(selected).filter(id=>state.cities[id].owner===state.player &&
         officersAt(state,id).length && state.cities[id].troops>=350 && state.cities[id].food>=20);
       openMarch(origins,[selected]);
+    } else if (button.hasAttribute('data-hire-city')) {
+      const origins=owned(state).filter(id=>!unavailable(state,id,'hire')).sort((a,b)=>roadDistance(a,selected)-roadDistance(b,selected));
+      openDomestic('hire',origins,selected);
     } else if (button.hasAttribute('data-persuade-city')) {
       openDomestic('persuade',persuasionOrigins(state,selected),selected);
     } else if (button.hasAttribute('data-saves')) {

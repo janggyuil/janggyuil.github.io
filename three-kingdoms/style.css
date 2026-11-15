@@ -308,3 +308,9 @@ dialog .moveList label input{display:inline-block;margin:3px 0 0;width:auto}
 .corpsCities{grid-template-columns:repeat(2,minmax(0,1fr));margin-bottom:8px}
 .corpsCities label{flex-wrap:wrap}
 .corpsCities small{margin-left:0;width:100%;padding-left:20px}
+/* 재야 인재 목록과 원거리 등용 버튼 */
+.actions [data-hire-city]{grid-column:1/-1}
+.officers.freeOfficers span{background:#e3f2e6;border-color:#8fc39c;color:#1f5a33}
+.moveList .successor{display:flex;gap:6px;align-items:center;margin-top:5px;font-size:12px;font-weight:700}
+dialog .moveList .successor select{display:block;margin:0;padding:4px 6px;font-size:12px;width:auto;max-width:100%}
+.moveList .successorNote{color:#9a5b21}
