@@ -2,6 +2,8 @@
 
 const COMMANDS_PER_MONTH = 5;
 const TRANSFER_TURNS = 2;
+// 장수 이동은 거리와 관계없이 다음 달에 도착합니다.
+const OFFICER_MOVE_TURNS = 1;
 
 const factions = {
   cao: {name:'조조', seal:'曹', color:'#375a76'},
@@ -388,7 +390,7 @@ const record = (s,message,eliminated) => {
 };
 
 const teamNames = generals => generals.map(o=>o.name).join('·');
-const transferOfficers = (s,t) => [t.officerId,t.deputyId].filter(id=>id!==undefined)
+const transferOfficers = (s,t) => (t.officerIds??[t.officerId,t.deputyId]).filter(id=>id!==undefined)
   .map(id=>s.officers.find(o=>o.id===id)).filter(Boolean);
 function teamSummary(team) {
   const who=team.officers.length?teamNames(team.officers):'장수 없음';
@@ -1091,7 +1093,8 @@ function settleTransfers(s) {
     const {route,units,faction}=transfer;
     const generals=transferOfficers(s,transfer);
     const target=route.at(-1);
-    const routeOpen=route.every(id=>s.cities[id].owner===faction);
+    // 장수 이동은 경로를 따지지 않고 도착지만 아군이면 됩니다. 아니면 출발 도시나 가까운 거점으로 갑니다.
+    const routeOpen=transfer.officerMove?s.cities[target].owner===faction:route.every(id=>s.cities[id].owner===faction);
     const destination=routeOpen?target:route.find(id=>s.cities[id].owner===faction)??stronghold(s,faction);
     for (const officer of generals) {
       officer.city=destination??null;
@@ -1103,7 +1106,7 @@ function settleTransfers(s) {
       city.troops+=units;
       city.gold+=transfer.gold??0;
       city.food+=transfer.food??0;
-      record(s,`[${transfer.convoy?'수송':'병력 이동'}] ${generals.length?teamNames(generals):'수송대'} · ${towns[destination].name}에${units?` ${fmt(units)}명`:''}${cargoText(transfer)} ${routeOpen?'도착':'복귀 · 이동 경로 차단'}`);
+      record(s,`[${transfer.convoy?'수송':transfer.officerMove?'장수 이동':'병력 이동'}] ${generals.length?teamNames(generals):'수송대'} · ${towns[destination].name}에${units?` ${fmt(units)}명`:''}${cargoText(transfer)} ${routeOpen?'도착':'복귀 · 이동 경로 차단'}`);
     }
   }
   s.transfers=pending;
@@ -1116,6 +1119,23 @@ const cargoLimit = (s,from,units) => {
   const c=s.cities[from];
   return {gold:c.gold,food:Math.max(0,c.food-foodCost(units))};
 };
+
+// 장수만 다른 아군 도시로 보냅니다. 인원 제한이 없고, 어디든 다음 달에 도착하며 명령 1회를 씁니다.
+function moveOfficers(s,from,to,officerIds) {
+  const a=s.cities[from], b=s.cities[to];
+  const ids=[...new Set([].concat(officerIds))];
+  const movers=ids.map(id=>s.officers.find(o=>o.id===id && o.city===from && !o.captive));
+  if (!s.ap || s.end || !a?.owner || from===to || b?.owner!==a.owner || !ids.length || movers.some(o=>!o)) return false;
+  const arrival=s.month+OFFICER_MOVE_TURNS;
+  for (const officer of movers) {
+    officer.city=null;
+    officer.inTransit=a.owner;
+  }
+  s.transfers.push({route:[from,to],units:0,officerIds:ids,faction:a.owner,arrival,officerMove:true});
+  s.ap--;
+  record(s,`[장수 이동] ${teamNames(movers)} · ${towns[from].name} → ${towns[to].name} · ${date(arrival)} 도착 예정`);
+  return true;
+}
 
 // officerIds는 장수 ID 하나 또는 [주장, 부장] 배열입니다.
 // cargo는 병력 이동에서만 쓰는 {gold, food} 수송량입니다.
@@ -1294,7 +1314,7 @@ function advance(s,random=Math.random) {
   }
 }
 
-if (typeof module!=='undefined') module.exports={factions,playable,scenarios,freeCityOf,seasonFor,applySeasonEvent,towns,roads,roster,owned,neighbors,friendlyRoutes,officersAt,factionOfficers,captives,resolveCaptive,newGame,unavailable,persuasionTargets,persuasionChance,applyDomestic,march,advance,power,levyAmount,formCorps,disbandCorps,corpsCandidates,corpsFreeCities,corpsPromptDue,corpsById,corpsName,CORPS_PROMPT_CITIES,RANKS,rankOf,meritOf,commandCap,addMerit,attackCapacity,migrateOfficers,extraOfficers,isFrontline,rearReserve,convoyPlan,sendConvoy,emperorSeat,emperorHolder,emperorBonus,updateEmperor,EMPEROR_MOVE,EMPEROR_GOLD,delegateStyle,delegationUnavailable,setDelegation,delegatePlan,delegateTurn,governorOf,DELEGATE_STYLES,goldIncome,holdCouncil,followAdvice,adviceUnavailable,marchCapacity,councilUnavailable,councilAdvisors,councilQuality,activeCouncil,rulerOf,COUNCIL_GRADES,cargoLimit,cityCaps,gain,battleTeam,bestTeam,defendingTeam,statsOf,MAX_GENERALS};
+if (typeof module!=='undefined') module.exports={factions,playable,scenarios,freeCityOf,seasonFor,applySeasonEvent,towns,roads,roster,owned,neighbors,friendlyRoutes,officersAt,factionOfficers,captives,resolveCaptive,newGame,unavailable,persuasionTargets,persuasionChance,applyDomestic,march,advance,power,levyAmount,formCorps,disbandCorps,corpsCandidates,corpsFreeCities,corpsPromptDue,corpsById,corpsName,CORPS_PROMPT_CITIES,RANKS,rankOf,meritOf,commandCap,addMerit,attackCapacity,migrateOfficers,extraOfficers,isFrontline,rearReserve,convoyPlan,sendConvoy,emperorSeat,emperorHolder,emperorBonus,updateEmperor,EMPEROR_MOVE,EMPEROR_GOLD,delegateStyle,delegationUnavailable,setDelegation,delegatePlan,delegateTurn,governorOf,DELEGATE_STYLES,goldIncome,holdCouncil,followAdvice,adviceUnavailable,marchCapacity,councilUnavailable,councilAdvisors,councilQuality,activeCouncil,rulerOf,COUNCIL_GRADES,cargoLimit,cityCaps,gain,battleTeam,bestTeam,defendingTeam,statsOf,MAX_GENERALS,moveOfficers,OFFICER_MOVE_TURNS};
 
 if (typeof document!=='undefined') {
   const $=id=>document.getElementById(id);
@@ -1491,7 +1511,8 @@ if (typeof document!=='undefined') {
           const held=activeCouncil(state,state.player);
           return ruler?.city===selected||held?.city===selected?`<button class="secondary councilButton" data-council ${reason&&!held?'disabled':''} title="${held?'회의 의견 다시 보기':reason||'군주와 참모가 작전을 논의합니다 · 명령 1회'}">${held?`작전 회의 · ${held.grade}${held.bonus?` 공격 +${Math.round(held.bonus*100)}%`:''} · 의견 보기`:'작전 회의 · 명령 1회'}</button>`:'';})()}
         <button class="secondary" data-march ${hasMarch&&attackTargets.length?'':'disabled'}>출진</button>
-        <button class="secondary" data-transfer ${hasMarch&&transferTargets.size?'':'disabled'}>병력 이동</button></div>${!generals.length?'<p class="hint choiceFoot">인접 도시에서 장수와 병력을 보내세요.</p>':''}`
+        <button class="secondary" data-transfer ${hasMarch&&transferTargets.size?'':'disabled'}>병력 이동</button>
+        <button class="secondary officerMoveButton" data-officer-move ${ours&&state.ap&&!state.end&&generals.length&&owned(state).length>1?'':'disabled'} title="장수만 아군 도시 어디로든 보냅니다 · 다음 달 도착 · 명령 1회">장수 이동 · 다음 달 도착</button></div>${!generals.length?'<p class="hint choiceFoot">인접 도시에서 장수와 병력을 보내세요.</p>':''}`
       :`<div class="actions${isRival?'':' singleAction'}"><button class="secondary full" data-invade ${origins.length&&state.ap&&!state.end?'':'disabled'}>이 도시 공격</button>
         ${isRival?`<button class="secondary full" data-persuade-city ${canPersuade?'':'disabled'}>적장 회유 · 160금</button>`:''}</div>
         ${isRival&&!canPersuade?`<p class="hint">회유 조건 · ${persuasionReason()}</p>`:''}
@@ -1507,10 +1528,9 @@ if (typeof document!=='undefined') {
     const active=state.transfers.filter(t=>t.faction===state.player);
     if (!active.length) return '';
     return `<section class="transferList" aria-label="이동 중인 부대"><h3>이동 중인 부대</h3><ul>${active.map(t=>{
-      const names=[t.officerId,t.deputyId].filter(id=>id!==undefined)
-        .map(id=>state.officers.find(o=>o.id===id)?.name).filter(Boolean).join('·')||'수송대';
+      const names=transferOfficers(state,t).map(o=>o.name).join('·')||'수송대';
       const route=t.route.map(id=>towns[id].name).join(' → ');
-      return `<li><strong>${route}</strong><span>${escapeText(names)} · ${fmt(t.units)}명${cargoText(t)} · ${t.arrival-state.month}턴 남음</span></li>`;
+      return `<li><strong>${route}</strong><span>${escapeText(names)} · ${t.officerMove?'장수 이동':`${fmt(t.units)}명`}${cargoText(t)} · ${t.arrival-state.month}턴 남음</span></li>`;
     }).join('')}</ul></section>`;
   }
 
@@ -1722,6 +1742,33 @@ if (typeof document!=='undefined') {
       commit();
       notify(state.log[0].message);
     };
+  }
+
+  // 장수만 다른 아군 도시로 보냅니다. 거리와 관계없이 다음 달에 도착합니다.
+  function openOfficerMove(id) {
+    const generals=officersAt(state,id);
+    const ruler=rulerOf(state,state.player);
+    const governor=state.cities[id].delegated?governorOf(state,id):null;
+    const commanders=new Set((state.corps??[]).map(c=>c.commander));
+    const role=o=>[o===ruler&&'군주',o===governor&&'성주 · 떠나면 위임 해제',commanders.has(o.id)&&'도독 · 떠나면 군단 해산'].filter(Boolean).join(' · ');
+    const targets=owned(state).filter(c=>c!==id).sort((a,b)=>towns[a].name.localeCompare(towns[b].name,'ko'));
+    show(`장수 이동 · ${towns[id].name}`,`
+      <p>병력 없이 장수만 보냅니다. 아군 도시라면 거리와 관계없이 <strong>다음 달</strong>에 도착하며, 명령 1회를 씁니다. 도착할 때 그 도시가 적의 손에 있으면 출발 도시나 가까운 아군 도시로 갑니다.</p>
+      <label>도착 도시<select name="to">${targets.map(c=>`<option value="${c}">${towns[c].name} · 장수 ${officersAt(state,c).length}명 · 병력 ${fmt(state.cities[c].troops)}</option>`).join('')}</select></label>
+      <div class="subhead">보낼 장수</div>
+      <div class="moveList">${generals.map(o=>`<label><input type="checkbox" name="officer" value="${o.id}"><span><strong>${escapeText(o.name)}</strong>${role(o)?` <em>${role(o)}</em>`:''}<small>${statLine(o)}</small></span></label>`).join('')}</div>
+      <p class="hint marchError" hidden>보낼 장수를 한 명 이상 고르세요.</p>
+      <p class="hint">도착 예정 · ${date(state.month+OFFICER_MOVE_TURNS)}</p>`,
+      '장수 보내기',form=>{
+        const data=new FormData(form);
+        const ids=data.getAll('officer').map(Number);
+        if (!ids.length || !moveOfficers(state,id,data.get('to'),ids)) {
+          form.querySelector('.marchError').hidden=false;
+          return false;
+        }
+        commit(false);
+        notify(state.log[0].message);
+      });
   }
 
   function openCouncil(id) {
@@ -2219,6 +2266,8 @@ if (typeof document!=='undefined') {
       else openCouncil(selected);
     } else if (button.hasAttribute('data-march')) {
       openMarch([selected],neighbors(selected).filter(id=>state.cities[id].owner!==state.player));
+    } else if (button.hasAttribute('data-officer-move')) {
+      openOfficerMove(selected);
     } else if (button.hasAttribute('data-transfer')) {
       openMarch([selected],[...friendlyRoutes(state,selected).keys()],true);
     } else if (button.hasAttribute('data-invade')) {
@@ -2266,7 +2315,7 @@ if (typeof document!=='undefined') {
     <li>도시를 선택하면 병력과 장수를 볼 수 있습니다. 세력 전체에서 한 달에 명령을 ${COMMANDS_PER_MONTH}회 내릴 수 있습니다.</li>
     <li>금으로 병력을 모집하고, 농지를 개발하고, 성벽을 보수하거나 재야 장수를 등용하세요. 무력은 모집과 전투, 정치는 내정과 월 수입에 영향을 줍니다.</li>
     <li>아군 도시나 인접 적 도시에서 적장 회유를 선택해 상대 장수를 영입할 수 있습니다. 군주는 회유 대상에서 제외됩니다.</li>
-    <li>점선으로 연결된 도시에 출진할 수 있습니다. 병력과 지휘 장수의 무력, 상대 성벽으로 승률을 계산합니다. 병력 이동은 아군 도시를 잇는 경로를 따라 가능하며, 지휘 장수와 병력은 두 턴 뒤 도착합니다.</li>
+    <li>점선으로 연결된 도시에 출진할 수 있습니다. 병력과 지휘 장수의 무력, 상대 성벽으로 승률을 계산합니다. 병력 이동은 아군 도시를 잇는 경로를 따라 가능하며, 지휘 장수와 병력은 두 턴 뒤 도착합니다. 장수 이동은 병력 없이 장수만 아군 도시 어디로든 보내며 다음 달에 도착합니다.</li>
     <li>도시를 점령하면 수비 장수를 포로로 잡습니다. 포로는 명령을 소모하지 않고 등용·참수·석방할 수 있습니다.</li>
     <li>달이 바뀔 때 계절에 따라 풍년, 홍수, 폭설 등이 무작위로 발생하며 해당 도시의 자원이나 병력이 바뀝니다.</li>
     <li>다음 달에는 금과 군량을 정산하고 다른 군주들이 행동합니다. 군량이 부족하면 병력을 잃습니다. 진행 상황은 이 브라우저에 자동 저장됩니다. 저장 / 불러오기에서 원하는 시점을 따로 저장할 수 있습니다.</li>

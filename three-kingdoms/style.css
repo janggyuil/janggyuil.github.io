@@ -278,3 +278,11 @@ dialog:has(.marchPlanner) [type=submit]{min-width:104px}
 .corpsCities small{color:var(--muted);font-size:10px;margin-left:auto}
 .corpsButton{margin-top:6px}
 .marchCap{margin:4px 0 0;font-size:11px}
+.actions .officerMoveButton{grid-column:1/-1}
+.moveList{display:grid;gap:6px;max-height:280px;overflow:auto;margin:6px 0}
+dialog .moveList label{display:flex;gap:8px;align-items:flex-start;margin:0;padding:7px 8px;border:1px solid #d8ccb2;border-radius:4px;background:#fffaf0;font-weight:400;cursor:pointer}
+dialog .moveList label input{display:inline-block;margin:3px 0 0;width:auto}
+.moveList label:has(input:checked){border-color:#ad7935;background:#f6ead2}
+.moveList strong{font-size:13px}
+.moveList em{font-style:normal;font-size:11px;color:#9a5b21}
+.moveList small{display:block;font-size:11px;color:#6b6252}
