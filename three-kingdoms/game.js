@@ -1,6 +1,6 @@
 'use strict';
 
-const COMMANDS_PER_MONTH = 3;
+const COMMANDS_PER_MONTH = 5;
 const TRANSFER_TURNS = 2;
 
 const factions = {
