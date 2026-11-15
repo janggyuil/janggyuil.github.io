@@ -293,3 +293,18 @@ dialog .moveList label input{display:inline-block;margin:3px 0 0;width:auto}
 .moveList strong{font-size:13px}
 .moveList em{font-style:normal;font-size:11px;color:#9a5b21}
 .moveList small{display:block;font-size:11px;color:#6b6252}
+/* 아군 도시 명암: 직접 통치는 진하게, 위임·군단은 밝고 흐리게 */
+.city.directCity .flag,.legendDirect{filter:brightness(.82) saturate(1.2)}
+.city.directCity .flag{box-shadow:0 0 0 1.5px #1d1912,0 1px 4px #30250f99}
+.city.delegatedCity .flag,.legendDelegated{filter:brightness(1.75) saturate(.4)}
+.city.delegatedCity .flag{opacity:.82}
+.city.delegatedCity .cityName{opacity:.8}
+/* 군단 구분: 군단마다 색과 번호 */
+.corpsTag{display:inline-grid;place-items:center;min-width:15px;height:15px;padding:0 2px;border-radius:3px;background:var(--k);color:#fff;border:1px solid #fff8e6;font:800 9px/1 var(--sans);font-style:normal;box-shadow:0 1px 3px #30250f66}
+.city .corpsTag{position:absolute;top:10px;right:calc(50% + 9px)}
+.corpsList li{border-left:4px solid var(--k,#c7bca3);padding-left:8px}
+.corpsList .corpsTag{background:var(--k);vertical-align:1px}
+.legendCorps{margin-right:2px}
+.corpsCities{grid-template-columns:repeat(2,minmax(0,1fr));margin-bottom:8px}
+.corpsCities label{flex-wrap:wrap}
+.corpsCities small{margin-left:0;width:100%;padding-left:20px}

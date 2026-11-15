@@ -615,6 +615,10 @@ const CORPS_MIN_RANK = 2; // RANKS[2] = 장군
 const CORPS_BONUS = .05;
 const corpsById = (s,id) => (s.corps??[]).find(c=>c.id===id);
 const corpsName = (s,id) => `제${(s.corps??[]).findIndex(c=>c.id===id)+1}군단`;
+// 지도와 군단 창에서 군단을 구별하는 색입니다(군단 순서대로).
+const CORPS_COLORS = ['#e8590c','#1c7ed6','#2f9e44','#ae3ec9','#f2b705','#0c8599','#d6336c','#5c940d'];
+const corpsColor = (s,id) => CORPS_COLORS[Math.max(0,(s.corps??[]).findIndex(c=>c.id===id))%CORPS_COLORS.length];
+const corpsNumber = (s,id) => (s.corps??[]).findIndex(c=>c.id===id)+1;
 const localLeader = (s,id) => officersAt(s,id).sort((a,b)=>(b.lead+b.war+b.intel+b.politics+b.charm)-(a.lead+a.war+a.intel+a.politics+a.charm))[0];
 function corpsCommander(s,corps) {
   const o=s.officers.find(x=>x.id===corps.commander);
@@ -1544,12 +1548,14 @@ if (typeof document!=='undefined') {
       const f=factions[c.owner];
       const freeCount=freeCounts[id]??0;
       const officerCount=officerCounts[id]??0;
-      return `<button class="city${selected===id?' active':''}" data-city="${id}" aria-pressed="${selected===id}" aria-label="${t.name}${id===emperorSeat(state)?', 황제 거처':''}, ${factionName(c.owner)}, 병력 ${fmt(c.troops)}명${officerCount?`, 장수 ${officerCount}명`:''}${freeCount?`, 재야 장수 ${freeCount}명`:''}" style="--x:${t.x}%;--y:${t.y}%;--f:${color(c.owner)}"><span class="flag${f?'':' neutralFlag'}" aria-hidden="true">${f?.seal??'城'}</span>${officerCount?`<span class="officerBadge" title="장수 ${officerCount}명" aria-hidden="true">${officerCount}</span>`:''}${freeCount?`<span class="freeBadge" title="재야 장수 ${freeCount}명" aria-hidden="true">${freeCount}</span>`:''}${id===emperorSeat(state)?`<span class="emperorBadge" title="황제 · ${c.owner?`${factionName(c.owner)} 옹위`:'옹위 세력 없음'}" aria-hidden="true">帝</span>`:''}<span class="cityName">${t.name}</span><span class="cityTroops">${fmt(c.troops)}</span></button>`;
+      // 아군 도시 가운데 위임(군단 포함) 도시는 흐리게, 직접 다스리는 도시는 진하게 그립니다.
+      const ruled=c.owner && c.owner===state.player?(c.delegated?' delegatedCity':' directCity'):'';
+      return `<button class="city${selected===id?' active':''}${ruled}" data-city="${id}" aria-pressed="${selected===id}" aria-label="${t.name}${id===emperorSeat(state)?', 황제 거처':''}, ${factionName(c.owner)}${ruled?c.delegated?`, ${c.corps!==undefined&&corpsById(state,c.corps)?corpsName(state,c.corps):'위임 도시'}`:', 직할 도시':''}, 병력 ${fmt(c.troops)}명${officerCount?`, 장수 ${officerCount}명`:''}${freeCount?`, 재야 장수 ${freeCount}명`:''}" style="--x:${t.x}%;--y:${t.y}%;--f:${color(c.owner)}"><span class="flag${f?'':' neutralFlag'}" aria-hidden="true">${f?.seal??'城'}</span>${c.owner===state.player && c.corps!==undefined && corpsById(state,c.corps)?`<span class="corpsTag" style="--k:${corpsColor(state,c.corps)}" title="${corpsName(state,c.corps)}" aria-hidden="true">${corpsNumber(state,c.corps)}</span>`:''}${officerCount?`<span class="officerBadge" title="장수 ${officerCount}명" aria-hidden="true">${officerCount}</span>`:''}${freeCount?`<span class="freeBadge" title="재야 장수 ${freeCount}명" aria-hidden="true">${freeCount}</span>`:''}${id===emperorSeat(state)?`<span class="emperorBadge" title="황제 · ${c.owner?`${factionName(c.owner)} 옹위`:'옹위 세력 없음'}" aria-hidden="true">帝</span>`:''}<span class="cityName">${t.name}</span><span class="cityTroops">${fmt(c.troops)}</span></button>`;
     }).join('');
     $('legend').innerHTML=[...scenarioFor(state).rulers,null].map(id=>{
       const cities=owned(state,id).length;
       return `<span><i class="dot${id===null?' neutralDot':''}" style="--f:${color(id)}"></i>${factionName(id)} ${cities}</span>`;
-    }).join('')+`<span><i class="officerBadge legendFree" aria-hidden="true">#</i>주둔 장수</span><span><i class="freeBadge legendFree" aria-hidden="true">#</i>재야 장수</span>`+
+    }).join('')+(state.player?`<span><i class="dot legendDirect" style="--f:${color(state.player)}"></i>직접 통치</span><span><i class="dot legendDelegated" style="--f:${color(state.player)}"></i>위임·군단</span>${(state.corps??[]).map(k=>`<span><i class="corpsTag legendCorps" style="--k:${corpsColor(state,k.id)}">${corpsNumber(state,k.id)}</i>${corpsName(state,k.id)} · ${escapeText(state.officers.find(o=>o.id===k.commander)?.name??'')} ${k.cities.length}곳</span>`).join('')}`:'')+`<span><i class="officerBadge legendFree" aria-hidden="true">#</i>주둔 장수</span><span><i class="freeBadge legendFree" aria-hidden="true">#</i>재야 장수</span>`+
       `<span><i class="emperorBadge legendEmperor" aria-hidden="true">帝</i>황제 · ${towns[emperorSeat(state)].name} · ${state.cities[emperorSeat(state)].owner?`${factionName(state.cities[emperorSeat(state)].owner)} 옹위`:'옹위 세력 없음'}</span>`;
     drawMap();
   }
@@ -1769,7 +1775,7 @@ if (typeof document!=='undefined') {
   function openCorps(prompt=false) {
     const list=(state.corps??[]).map(corps=>{
       const cmd=state.officers.find(o=>o.id===corps.commander);
-      return `<li><div><strong>${corpsName(state,corps.id)}</strong> · 도독 ${escapeText(cmd?.name??'없음')}${cmd?` (${rankOf(cmd).name} · ${delegateStyle(cmd)}형)`:''}
+      return `<li style="--k:${corpsColor(state,corps.id)}"><div><strong><i class="corpsTag legendCorps">${corpsNumber(state,corps.id)}</i> ${corpsName(state,corps.id)}</strong> · 도독 ${escapeText(cmd?.name??'없음')}${cmd?` (${rankOf(cmd).name} · ${delegateStyle(cmd)}형)`:''}
         <small>${corps.cities.map(id=>towns[id].name).join(' · ')}</small></div>
         <button type="button" class="secondary" data-disband="${corps.id}">해산</button></li>`;
     }).join('');
@@ -1783,7 +1789,9 @@ if (typeof document!=='undefined') {
       ${canForm?`<div class="subhead">새 군단</div>
         <label>도독 (장군 이상)<select name="commander">${candidates.map(o=>`<option value="${o.id}">${escapeText(o.name)} · ${rankOf(o).name} · ${delegateStyle(o)}형 · ${towns[o.city].name}</option>`).join('')}</select></label>
         <p class="hint corpsNote"></p>
-        <fieldset class="corpsCities"><legend class="marchLabel">맡길 도시</legend>${free.map(id=>`<label><input type="checkbox" name="city" value="${id}">${towns[id].name}<small>${officersAt(state,id).length?`장수 ${officersAt(state,id).length}`:'장수 없음'}</small></label>`).join('')}</fieldset>`:
+        ${[['전선 도시 · 적·중립과 맞닿음',free.filter(id=>isFrontline(state,id))],['후방 도시',free.filter(id=>!isFrontline(state,id))]].filter(([,ids])=>ids.length).map(([title,ids])=>
+          `<fieldset class="corpsCities"><legend class="marchLabel">${title} · ${ids.length}곳</legend>${ids.map(id=>{const c=state.cities[id],n=officersAt(state,id).length;
+            return `<label><input type="checkbox" name="city" value="${id}">${towns[id].name}<small>${n?`장수 ${n}`:'장수 없음'} · 병력 ${fmt(c.troops)}${c.delegated?' · 위임 중':''}</small></label>`;}).join('')}</fieldset>`).join('')}`:
         `<p class="hint">${!candidates.length?'군단을 맡길 장군 이상 장수가 없습니다. 공적을 쌓아 승진시키세요.':'군단으로 묶을 직할 도시가 부족합니다.'}</p>`}`,
       canForm?'군단 결성':undefined,canForm?form=>{
         const data=new FormData(form);
