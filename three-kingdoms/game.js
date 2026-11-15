@@ -624,12 +624,20 @@ function corpsCommander(s,corps) {
   const o=s.officers.find(x=>x.id===corps.commander);
   return o && corps.cities.includes(o.city) && s.cities[o.city].owner===s.player ? o : null;
 }
-// 도독 후보: 아군 도시에 있는 장군 이상 장수(군주·다른 군단 도독 제외)
+// 도독 후보: 군단에 넣을 수 있는 도시(군주가 없고 다른 군단에 속하지 않은 직할 도시)에 있는 장군 이상 장수
+// 군주가 있는 도시나 다른 군단 도시에 있는 장군은 장수 이동으로 먼저 옮겨야 합니다(corpsBlockedGenerals).
+const corpsRankOk = o => RANKS.indexOf(rankOf(o))>=CORPS_MIN_RANK;
 function corpsCandidates(s) {
   const busy=new Set((s.corps??[]).map(c=>c.commander));
+  const free=new Set(corpsFreeCities(s));
+  return s.officers.filter(o=>o.city && free.has(o.city) && !busy.has(o.id) && corpsRankOk(o));
+}
+function corpsBlockedGenerals(s) {
+  const busy=new Set((s.corps??[]).map(c=>c.commander));
+  const free=new Set(corpsFreeCities(s));
   const ruler=rulerOf(s,s.player);
-  return s.officers.filter(o=>o.city && s.cities[o.city].owner===s.player && o!==ruler && !busy.has(o.id) &&
-    RANKS.indexOf(rankOf(o))>=CORPS_MIN_RANK);
+  return s.officers.filter(o=>o.city && s.cities[o.city].owner===s.player && !free.has(o.city) && o!==ruler &&
+    !busy.has(o.id) && corpsRankOk(o));
 }
 // 군단에 넣을 수 있는 도시: 군주 없는 직할 도시 중 다른 군단에 속하지 않은 곳
 const corpsFreeCities = s => owned(s).filter(id=>s.cities[id].corps===undefined && rulerOf(s,s.player)?.city!==id);
@@ -1418,7 +1426,7 @@ function advance(s,random=Math.random) {
   }
 }
 
-if (typeof module!=='undefined') module.exports={factions,playable,scenarios,freeCityOf,seasonFor,applySeasonEvent,towns,roads,roster,owned,neighbors,friendlyRoutes,officersAt,factionOfficers,captives,resolveCaptive,newGame,unavailable,persuasionTargets,persuasionChance,applyDomestic,march,advance,power,levyAmount,formCorps,disbandCorps,corpsCandidates,corpsFreeCities,corpsPromptDue,corpsById,corpsName,CORPS_PROMPT_CITIES,RANKS,rankOf,meritOf,commandCap,addMerit,attackCapacity,migrateOfficers,extraOfficers,isFrontline,rearReserve,convoyPlan,sendConvoy,emperorSeat,emperorHolder,emperorBonus,updateEmperor,EMPEROR_MOVE,EMPEROR_GOLD,delegateStyle,delegationUnavailable,setDelegation,delegatePlan,delegateTurn,governorOf,DELEGATE_STYLES,goldIncome,holdCouncil,followAdvice,adviceUnavailable,marchCapacity,councilUnavailable,councilAdvisors,councilQuality,activeCouncil,rulerOf,COUNCIL_GRADES,cargoLimit,cityCaps,gain,battleTeam,bestTeam,defendingTeam,statsOf,MAX_GENERALS,moveOfficers,OFFICER_MOVE_TURNS,sendOfficers,corpsOfficerPlan,corpsOfficerTurn,joinCorps,corpsCommander};
+if (typeof module!=='undefined') module.exports={factions,playable,scenarios,freeCityOf,seasonFor,applySeasonEvent,towns,roads,roster,owned,neighbors,friendlyRoutes,officersAt,factionOfficers,captives,resolveCaptive,newGame,unavailable,persuasionTargets,persuasionChance,applyDomestic,march,advance,power,levyAmount,formCorps,disbandCorps,corpsCandidates,corpsBlockedGenerals,corpsFreeCities,corpsPromptDue,corpsById,corpsName,CORPS_PROMPT_CITIES,RANKS,rankOf,meritOf,commandCap,addMerit,attackCapacity,migrateOfficers,extraOfficers,isFrontline,rearReserve,convoyPlan,sendConvoy,emperorSeat,emperorHolder,emperorBonus,updateEmperor,EMPEROR_MOVE,EMPEROR_GOLD,delegateStyle,delegationUnavailable,setDelegation,delegatePlan,delegateTurn,governorOf,DELEGATE_STYLES,goldIncome,holdCouncil,followAdvice,adviceUnavailable,marchCapacity,councilUnavailable,councilAdvisors,councilQuality,activeCouncil,rulerOf,COUNCIL_GRADES,cargoLimit,cityCaps,gain,battleTeam,bestTeam,defendingTeam,statsOf,MAX_GENERALS,moveOfficers,OFFICER_MOVE_TURNS,sendOfficers,corpsOfficerPlan,corpsOfficerTurn,joinCorps,corpsCommander};
 
 if (typeof document!=='undefined') {
   const $=id=>document.getElementById(id);
@@ -1780,6 +1788,8 @@ if (typeof document!=='undefined') {
         <button type="button" class="secondary" data-disband="${corps.id}">해산</button></li>`;
     }).join('');
     const candidates=corpsCandidates(state).sort((a,b)=>meritOf(b)-meritOf(a));
+    const blocked=corpsBlockedGenerals(state);
+    const blockedNote=blocked.length?`<p class="hint">${[...new Set(blocked.map(o=>o.city))].map(id=>`${towns[id].name}의 ${blocked.filter(o=>o.city===id).map(o=>escapeText(o.name)).join('·')}`).join(', ')}은(는) ${blocked.some(o=>rulerOf(state,state.player)?.city===o.city)?'군주가 있는 도시나 ':''}다른 군단 도시에 있어 도독이 될 수 없습니다. 장수 이동으로 군단에 넣을 도시에 먼저 보내세요.</p>`:'';
     const free=corpsFreeCities(state);
     const canForm=candidates.length && free.length>=2;
     show(prompt?'군단 구성':'군단',`
@@ -1792,7 +1802,8 @@ if (typeof document!=='undefined') {
         ${[['전선 도시 · 적·중립과 맞닿음',free.filter(id=>isFrontline(state,id))],['후방 도시',free.filter(id=>!isFrontline(state,id))]].filter(([,ids])=>ids.length).map(([title,ids])=>
           `<fieldset class="corpsCities"><legend class="marchLabel">${title} · ${ids.length}곳</legend>${ids.map(id=>{const c=state.cities[id],n=officersAt(state,id).length;
             return `<label><input type="checkbox" name="city" value="${id}">${towns[id].name}<small>${n?`장수 ${n}`:'장수 없음'} · 병력 ${fmt(c.troops)}${c.delegated?' · 위임 중':''}</small></label>`;}).join('')}</fieldset>`).join('')}`:
-        `<p class="hint">${!candidates.length?'군단을 맡길 장군 이상 장수가 없습니다. 공적을 쌓아 승진시키세요.':'군단으로 묶을 직할 도시가 부족합니다.'}</p>`}`,
+        `<p class="hint">${!candidates.length?(blocked.length?'군단에 넣을 수 있는 도시에 장군 이상 장수가 없습니다.':'군단을 맡길 장군 이상 장수가 없습니다. 공적을 쌓아 승진시키세요.'):'군단으로 묶을 직할 도시가 부족합니다.'}</p>`}
+      ${blockedNote}`,
       canForm?'군단 결성':undefined,canForm?form=>{
         const data=new FormData(form);
         const corps=formCorps(state,Number(data.get('commander')),data.getAll('city'));
