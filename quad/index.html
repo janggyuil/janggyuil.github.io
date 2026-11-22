@@ -36,6 +36,7 @@
   .empty-msg .row { display:flex; gap:6px; flex-wrap:wrap; justify-content:center; }
   .empty-msg input { width:min(360px,90%); background:#0b0c0e; border:1px solid var(--line); border-radius:6px; padding:6px 8px; }
   .hint { font-size:12px; color:var(--muted); }
+  .err { max-width:420px; font-size:12px; line-height:1.5; color:#ffb4a8; background:#3a1d1a; border:1px solid #5c2a24; border-radius:6px; padding:8px 10px; text-align:left; }
   dialog { background:#1b1d21; color:var(--text); border:1px solid var(--line); border-radius:10px; max-width:520px; }
   dialog::backdrop { background:#0009; }
   dialog li { margin:4px 0; }
@@ -75,6 +76,8 @@
   const saved = JSON.parse(localStorage.getItem(KEY) || '{}');
   const state = { layout: saved.layout || 'l-2x2', tiles: saved.tiles || [null, null, null, null] };
   const streams = [null, null, null, null];
+  const errors = [null, null, null, null];
+  const isMac = /Mac/.test(navigator.platform || navigator.userAgent);
   const save = () => localStorage.setItem(KEY, JSON.stringify({ layout: state.layout, tiles: state.tiles.map(t => t && t.type === 'url' ? t : null) }));
 
   function toEmbed(raw) {
@@ -121,11 +124,12 @@
           <button data-a="cam">카메라</button>
         </div>
         <input placeholder="URL 붙여넣고 Enter (유튜브, 치지직, 트위치 등)">
-        <span class="hint">칸 ${i + 1}</span>`;
+        <span class="hint">칸 ${i + 1}</span>
+        ${errors[i] ? `<div class="err">${errors[i]}</div>` : ''}`;
       box.querySelector('[data-a=screen]').onclick = () => capture(i, 'screen');
       box.querySelector('[data-a=cam]').onclick = () => capture(i, 'cam');
       box.querySelector('input').addEventListener('keydown', e => {
-        if (e.key === 'Enter' && e.target.value.trim()) { state.tiles[i] = { type: 'url', src: toEmbed(e.target.value), raw: e.target.value.trim() }; save(); render(i); }
+        if (e.key === 'Enter' && e.target.value.trim()) { errors[i] = null; state.tiles[i] = { type: 'url', src: toEmbed(e.target.value), raw: e.target.value.trim() }; save(); render(i); }
       });
       el.appendChild(box);
       return;
@@ -159,7 +163,29 @@
     bar.appendChild(b); return b;
   }
 
+  function explain(type, e) {
+    const what = type === 'screen' ? '화면 기록' : '카메라';
+    if (e.name === 'NotAllowedError' && /system/i.test(e.message)) {
+      return isMac
+        ? `Mac이 Chrome의 ${what}을 막고 있습니다. 시스템 설정 &gt; 개인정보 보호 및 보안 &gt; ${what}에서 Google Chrome을 켜고, Chrome을 완전히 종료(Cmd+Q)한 뒤 다시 여세요.`
+        : `운영체제가 브라우저의 ${what} 권한을 막고 있습니다. OS 개인정보 설정에서 브라우저를 허용하세요.`;
+    }
+    if (e.name === 'NotAllowedError') {
+      return type === 'screen'
+        ? '창 선택이 취소됐거나 거부됐습니다. 다시 누른 뒤, 뜨는 창에서 공유할 창을 클릭하고 "공유"를 누르세요.'
+        : '카메라 권한이 거부됐습니다. 주소창 왼쪽 아이콘을 눌러 카메라를 "허용"으로 바꾸고 새로고침하세요.';
+    }
+    if (e.name === 'NotFoundError') return '연결된 카메라를 찾지 못했습니다.';
+    if (e.name === 'NotReadableError') return `다른 앱이 ${what} 장치를 쓰고 있습니다. 해당 앱을 닫고 다시 시도하세요.`;
+    return '가져오지 못했습니다: ' + (e.message || e.name);
+  }
+
   async function capture(i, type) {
+    const md = navigator.mediaDevices;
+    if (!md || (type === 'screen' ? !md.getDisplayMedia : !md.getUserMedia)) {
+      errors[i] = '이 브라우저에서는 지원하지 않습니다. 휴대폰이나 메신저 앱 안의 브라우저에서는 화면 공유가 안 됩니다. PC의 Chrome에서 열어주세요.';
+      render(i); return;
+    }
     try {
       const s = type === 'screen'
         ? await navigator.mediaDevices.getDisplayMedia({ video: { frameRate: 30 }, audio: true })
@@ -169,10 +195,12 @@
       s.getVideoTracks()[0].addEventListener('ended', () => {
         if (streams[i] === s) { streams[i] = null; state.tiles[i] = null; render(i); }
       });
+      errors[i] = null;
       state.tiles[i] = { type };
       render(i);
     } catch (e) {
-      if (e.name !== 'NotAllowedError') alert('가져오지 못했습니다: ' + e.message);
+      errors[i] = explain(type, e);
+      render(i);
     }
   }
 
