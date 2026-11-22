@@ -1,0 +1,232 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<meta name="theme-color" content="#111">
+<title>쿼드 뷰 · 화면 4개 동시 보기</title>
+<style>
+  :root { --bg:#0e0f11; --tile:#17191c; --line:#2a2d32; --text:#e8e8e8; --muted:#8a8f98; --accent:#4f8cff; }
+  * { box-sizing:border-box; }
+  html,body { margin:0; height:100%; background:var(--bg); color:var(--text); font:14px/1.4 -apple-system,BlinkMacSystemFont,"Pretendard","Apple SD Gothic Neo",sans-serif; }
+  body { display:flex; flex-direction:column; }
+  header { display:flex; align-items:center; gap:8px; padding:6px 10px; border-bottom:1px solid var(--line); flex:none; }
+  header strong { margin-right:auto; font-size:13px; letter-spacing:.02em; }
+  body.bare header { display:none; }
+  button, input { font:inherit; color:inherit; }
+  button { background:#22252a; border:1px solid var(--line); border-radius:6px; padding:4px 10px; cursor:pointer; }
+  button:hover { border-color:#3c4048; }
+  button.on { border-color:var(--accent); color:#fff; }
+  #grid { flex:1; display:grid; gap:4px; padding:4px; min-height:0; grid-template-columns:1fr 1fr; grid-template-rows:1fr 1fr; }
+  #grid.l-1p3 { grid-template-columns:3fr 1fr; grid-template-rows:repeat(3,1fr); }
+  #grid.l-1p3 .tile:first-child { grid-row:1 / 4; }
+  #grid.l-row { grid-template-columns:repeat(4,1fr); grid-template-rows:1fr; }
+  #grid.focus { grid-template-columns:1fr; grid-template-rows:1fr; }
+  #grid.focus .tile:not(.focused) { display:none; }
+  .tile { position:relative; background:var(--tile); border:1px solid var(--line); border-radius:6px; overflow:hidden; min-width:0; min-height:0; }
+  .tile.drag { outline:2px dashed var(--accent); }
+  .tile video, .tile iframe { position:absolute; inset:0; width:100%; height:100%; border:0; background:#000; object-fit:contain; }
+  .bar { position:absolute; top:0; left:0; right:0; display:flex; gap:4px; padding:6px; background:linear-gradient(#000c,#0000); opacity:0; transition:opacity .15s; z-index:2; }
+  .tile:hover .bar, .tile.empty .bar { opacity:1; }
+  .bar .num { width:22px; text-align:center; color:var(--muted); align-self:center; font-weight:600; }
+  .bar button { padding:3px 8px; font-size:12px; background:#000a; }
+  .bar .sp { flex:1; }
+  .empty-msg { position:absolute; inset:0; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:10px; color:var(--muted); padding:16px; text-align:center; }
+  .empty-msg .row { display:flex; gap:6px; flex-wrap:wrap; justify-content:center; }
+  .empty-msg input { width:min(360px,90%); background:#0b0c0e; border:1px solid var(--line); border-radius:6px; padding:6px 8px; }
+  .hint { font-size:12px; color:var(--muted); }
+  dialog { background:#1b1d21; color:var(--text); border:1px solid var(--line); border-radius:10px; max-width:520px; }
+  dialog::backdrop { background:#0009; }
+  dialog li { margin:4px 0; }
+  kbd { background:#2a2d32; border-radius:4px; padding:0 5px; font-size:12px; }
+</style>
+</head>
+<body>
+<header>
+  <strong>쿼드 뷰</strong>
+  <button data-layout="l-2x2" class="on">2×2</button>
+  <button data-layout="l-1p3">1+3</button>
+  <button data-layout="l-row">1×4</button>
+  <button id="bare" title="상단 바 숨기기 (H)">바 숨기기</button>
+  <button id="fs" title="전체화면 (F)">전체화면</button>
+  <button id="help">도움말</button>
+</header>
+<main id="grid" class="l-2x2"></main>
+
+<dialog id="helpDlg">
+  <h3 style="margin-top:0">사용법</h3>
+  <ul>
+    <li><b>화면 공유</b>: 다른 앱 창, 브라우저 탭, 모니터 전체를 칸에 띄웁니다. 칸마다 다른 창을 고를 수 있습니다.</li>
+    <li><b>URL</b>: 유튜브, 치지직, 트위치, 구글 시트/슬라이드(게시된 링크) 등 임베드를 허용하는 페이지. 유튜브 링크는 자동으로 임베드 주소로 바뀝니다.</li>
+    <li><b>카메라</b>: 웹캠이나 캡처보드.</li>
+    <li>칸 더블클릭: 그 칸만 크게 보기 / 다시 4분할</li>
+    <li>칸 번호 끌어다 놓기: 칸 위치 바꾸기</li>
+    <li>단축키: <kbd>1</kbd>~<kbd>4</kbd> 확대, <kbd>0</kbd> 4분할, <kbd>F</kbd> 전체화면, <kbd>H</kbd> 바 숨기기</li>
+  </ul>
+  <p class="hint">URL 구성은 이 브라우저에 저장되어 다음에 다시 열면 복원됩니다. 화면 공유는 보안 정책상 매번 다시 선택해야 합니다. 네이버, 구글 검색 등 일부 사이트는 자체 정책으로 다른 페이지 안에 띄우는 것을 막아 URL 방식이 안 됩니다. 이럴 땐 그 사이트를 별도 창으로 열고 "화면 공유"로 가져오세요.</p>
+  <form method="dialog" style="text-align:right"><button>닫기</button></form>
+</dialog>
+
+<script>
+(() => {
+  const KEY = 'quadview.v1';
+  const grid = document.getElementById('grid');
+  const saved = JSON.parse(localStorage.getItem(KEY) || '{}');
+  const state = { layout: saved.layout || 'l-2x2', tiles: saved.tiles || [null, null, null, null] };
+  const streams = [null, null, null, null];
+  const save = () => localStorage.setItem(KEY, JSON.stringify({ layout: state.layout, tiles: state.tiles.map(t => t && t.type === 'url' ? t : null) }));
+
+  function toEmbed(raw) {
+    let s = raw.trim();
+    if (!/^https?:\/\//i.test(s)) s = 'https://' + s;
+    try {
+      const u = new URL(s);
+      const h = u.hostname.replace(/^www\.|^m\./, '');
+      let id = null;
+      if (h === 'youtu.be') id = u.pathname.slice(1);
+      else if (h.endsWith('youtube.com')) {
+        if (u.pathname === '/watch') id = u.searchParams.get('v');
+        else { const m = u.pathname.match(/^\/(live|shorts|embed)\/([^/?]+)/); if (m) id = m[2]; }
+      }
+      if (id) return `https://www.youtube.com/embed/${id}?autoplay=1&mute=1&playsinline=1`;
+      if (h === 'twitch.tv') { const ch = u.pathname.split('/')[1]; if (ch) return `https://player.twitch.tv/?channel=${ch}&parent=${location.hostname}&muted=true`; }
+      const cz = h === 'chzzk.naver.com' && u.pathname.match(/^\/live\/([^/]+)/);
+      if (cz) return `https://chzzk.naver.com/embed/live/${cz[1]}`;
+      return u.href;
+    } catch { return s; }
+  }
+
+  function stopStream(i) {
+    if (streams[i]) { streams[i].getTracks().forEach(t => t.stop()); streams[i] = null; }
+  }
+
+  function render(i) {
+    const el = grid.children[i];
+    const t = state.tiles[i];
+    el.innerHTML = '';
+    el.classList.toggle('empty', !t);
+    const bar = document.createElement('div');
+    bar.className = 'bar';
+    bar.innerHTML = `<span class="num" draggable="true" title="끌어서 위치 바꾸기">${i + 1}</span>`;
+    el.appendChild(bar);
+    bar.querySelector('.num').addEventListener('dragstart', e => e.dataTransfer.setData('text/plain', String(i)));
+
+    if (!t) {
+      const box = document.createElement('div');
+      box.className = 'empty-msg';
+      box.innerHTML = `
+        <div class="row">
+          <button data-a="screen">화면/창 공유</button>
+          <button data-a="cam">카메라</button>
+        </div>
+        <input placeholder="URL 붙여넣고 Enter (유튜브, 치지직, 트위치 등)">
+        <span class="hint">칸 ${i + 1}</span>`;
+      box.querySelector('[data-a=screen]').onclick = () => capture(i, 'screen');
+      box.querySelector('[data-a=cam]').onclick = () => capture(i, 'cam');
+      box.querySelector('input').addEventListener('keydown', e => {
+        if (e.key === 'Enter' && e.target.value.trim()) { state.tiles[i] = { type: 'url', src: toEmbed(e.target.value), raw: e.target.value.trim() }; save(); render(i); }
+      });
+      el.appendChild(box);
+      return;
+    }
+
+    const sp = document.createElement('span'); sp.className = 'sp'; bar.appendChild(sp);
+    if (t.type === 'url') {
+      const f = document.createElement('iframe');
+      f.src = t.src;
+      f.allow = 'autoplay; fullscreen; encrypted-media; picture-in-picture; clipboard-write';
+      f.allowFullscreen = true;
+      el.appendChild(f);
+      addBtn(bar, '새로고침', () => { f.src = t.src; });
+      addBtn(bar, '새 창', () => window.open(t.raw.startsWith('http') ? t.raw : 'https://' + t.raw, '_blank'));
+    } else {
+      const v = document.createElement('video');
+      v.autoplay = true; v.playsInline = true; v.muted = true;
+      v.srcObject = streams[i];
+      el.appendChild(v);
+      if (streams[i] && streams[i].getAudioTracks().length) {
+        const b = addBtn(bar, '소리 켜기', () => { v.muted = !v.muted; b.textContent = v.muted ? '소리 켜기' : '소리 끄기'; });
+      }
+      addBtn(bar, '다시 선택', () => capture(i, t.type));
+    }
+    addBtn(bar, '비우기', () => { stopStream(i); state.tiles[i] = null; save(); render(i); });
+  }
+
+  function addBtn(bar, label, fn) {
+    const b = document.createElement('button'); b.textContent = label;
+    b.onclick = e => { e.stopPropagation(); fn(); };
+    bar.appendChild(b); return b;
+  }
+
+  async function capture(i, type) {
+    try {
+      const s = type === 'screen'
+        ? await navigator.mediaDevices.getDisplayMedia({ video: { frameRate: 30 }, audio: true })
+        : await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
+      stopStream(i);
+      streams[i] = s;
+      s.getVideoTracks()[0].addEventListener('ended', () => {
+        if (streams[i] === s) { streams[i] = null; state.tiles[i] = null; render(i); }
+      });
+      state.tiles[i] = { type };
+      render(i);
+    } catch (e) {
+      if (e.name !== 'NotAllowedError') alert('가져오지 못했습니다: ' + e.message);
+    }
+  }
+
+  function setFocus(i) {
+    const cur = grid.querySelector('.focused');
+    grid.querySelectorAll('.tile').forEach(t => t.classList.remove('focused'));
+    if (i == null || (cur && cur === grid.children[i])) { grid.classList.remove('focus'); return; }
+    grid.children[i].classList.add('focused');
+    grid.classList.add('focus');
+  }
+
+  function swap(a, b) {
+    if (a === b) return;
+    [state.tiles[a], state.tiles[b]] = [state.tiles[b], state.tiles[a]];
+    [streams[a], streams[b]] = [streams[b], streams[a]];
+    save(); render(a); render(b);
+  }
+
+  function setLayout(l) {
+    state.layout = l;
+    grid.className = l;
+    document.querySelectorAll('[data-layout]').forEach(b => b.classList.toggle('on', b.dataset.layout === l));
+    save();
+  }
+
+  for (let i = 0; i < 4; i++) {
+    const el = document.createElement('section');
+    el.className = 'tile';
+    el.addEventListener('dblclick', e => { if (!e.target.closest('.bar, .empty-msg')) setFocus(i); });
+    el.addEventListener('dragover', e => { e.preventDefault(); el.classList.add('drag'); });
+    el.addEventListener('dragleave', () => el.classList.remove('drag'));
+    el.addEventListener('drop', e => { e.preventDefault(); el.classList.remove('drag'); swap(Number(e.dataTransfer.getData('text/plain')), i); });
+    grid.appendChild(el);
+  }
+  // 영상이 iframe 안에 있으면 더블클릭이 iframe에 먹히므로, 번호 버튼 더블클릭도 확대로 연결
+  grid.addEventListener('dblclick', e => { const n = e.target.closest('.num'); if (n) setFocus(Number(n.textContent) - 1); });
+
+  state.tiles.forEach((_, i) => render(i));
+  setLayout(state.layout);
+
+  document.querySelectorAll('[data-layout]').forEach(b => b.onclick = () => { setFocus(null); setLayout(b.dataset.layout); });
+  const toggleFs = () => document.fullscreenElement ? document.exitFullscreen() : document.documentElement.requestFullscreen();
+  const toggleBare = () => document.body.classList.toggle('bare');
+  document.getElementById('fs').onclick = toggleFs;
+  document.getElementById('bare').onclick = toggleBare;
+  document.getElementById('help').onclick = () => document.getElementById('helpDlg').showModal();
+  document.addEventListener('keydown', e => {
+    if (e.target.matches('input') || e.metaKey || e.ctrlKey || e.altKey) return;
+    if (/^[1-4]$/.test(e.key)) setFocus(Number(e.key) - 1);
+    else if (e.key === '0' || e.key === 'Escape') setFocus(null);
+    else if (e.key === 'f' || e.key === 'F') toggleFs();
+    else if (e.key === 'h' || e.key === 'H') toggleBare();
+  });
+})();
+</script>
+</body>
+</html>
